@@ -1,6 +1,6 @@
 # Mikjersi certu
 
-The Python package *mikjersi_certu* provides a GUI and a rules engine for playing the *Mikjersi* board-game, which is a micro-variant of [*Jersi*](https://github.com/LucasBorboleta/jersi) board-game. The rules of Mikjersi are those of Jersi, but with the following changes:
+The Python package *mikjersi_certu* provides a GUI and a rules engine for playing the *Mikjersi* board-game, which is a micro-variant of [*Jersi*](https://github.com/LucasBorboleta/jersi) board-game. The rules of Mikjersi are those of Jersi, but with the following changes (https://github.com/LucasBorboleta/mikjersi):
 
 - **Board** -- The board is made of 5x5 squared cells.
 - **Moves** -- The moves are only vertically and horizontally, but not along diagonal.
