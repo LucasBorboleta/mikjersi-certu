@@ -173,6 +173,7 @@ class Cube:
     __init_done = False
     __king_index = None
     __name_to_cube = {}
+    __opposite_index = None
     __sort_and_player_to_label = {}
 
     all = None # shortcut to Cube.get_all()
@@ -263,11 +264,17 @@ class Cube:
 
 
     @staticmethod
+    def get_opposite_index(cube_index):
+        return Cube.__opposite_index[cube_index]
+
+
+    @staticmethod
     def init():
         if not Cube.__init_done:
             Cube.__create_cubes()
             Cube.__create_all_sorted_cubes()
             Cube.__create_king_index()
+            Cube.__create__opposite_index()
             Cube.__init_done = True
 
 
@@ -296,6 +303,16 @@ class Cube:
 
         Cube.white_king_index = Cube.get_king_index(Player.WHITE)
         Cube.black_king_index = Cube.get_king_index(Player.BLACK)
+
+
+    @staticmethod
+    def __create__opposite_index():
+        Cube.__opposite_index = array.array('b', [Null.CUBE for _ in Cube.all])
+        for cube in Cube.all:
+            for opposite in Cube.all:
+                if opposite.sort == cube.sort and opposite.player != cube.player:
+                    Cube.__opposite_index[cube.index] = opposite.index
+                    break
 
 
     @staticmethod
@@ -332,7 +349,7 @@ class Cube:
 
 class Cell:
 
-    __slots__ = ('name', 'position_uv', 'reserve', 'index')
+    __slots__ = ('name', 'position_uv', 'reserve', 'player', 'index')
 
     __all_active_indices = []
     __all_indices = []
@@ -349,16 +366,18 @@ class Cell:
     all = None # shortcut to Cell.get_all()
 
 
-    def __init__(self, name, position_uv, reserve=False):
+    def __init__(self, name, position_uv, reserve=False, player=None):
 
         assert name not in Cell.__name_to_cell
         assert len(position_uv) == 2
         assert reserve in [True, False]
         assert position_uv not in Cell.__position_uv_to_cell
+        assert player is None or player in Player
 
         self.name = name
         self.position_uv = position_uv
         self.reserve = reserve
+        self.player = player
         self.index = None
 
         Cell.__name_to_cell[self.name] = self
@@ -534,13 +553,13 @@ class Cell:
         Cell('a4', (1, -2))
         Cell('a5', (2, -2))
 
-        Cell('A0', (-3, -3), reserve=True)
-        Cell('A1', (-2, -3), reserve=True)
-        Cell('A2', (-1, -3), reserve=True)
-        Cell('A3', (0, -3), reserve=True)
-        Cell('A4', (1, -3), reserve=True)
-        Cell('A5', (2, -3), reserve=True)
-        Cell('A6', (3, -3), reserve=True)
+        Cell('A0', (-3, -3), reserve=True, player=Player.WHITE)
+        Cell('A1', (-2, -3), reserve=True, player=Player.WHITE)
+        Cell('A2', (-1, -3), reserve=True, player=Player.WHITE)
+        Cell('A3', (0, -3), reserve=True, player=Player.WHITE)
+        Cell('A4', (1, -3), reserve=True, player=Player.WHITE)
+        Cell('A5', (2, -3), reserve=True, player=Player.WHITE)
+        Cell('A6', (3, -3), reserve=True, player=Player.WHITE)
 
         # Row "b"
         Cell('b1', (-2, -1))
@@ -570,13 +589,13 @@ class Cell:
         Cell('e4', (1, 2))
         Cell('e5', (2, 2))
 
-        Cell('E0', (-3, 3), reserve=True)
-        Cell('E1', (-2, 3), reserve=True)
-        Cell('E2', (-1, 3), reserve=True)
-        Cell('E3', (0, 3), reserve=True)
-        Cell('E4', (1, 3), reserve=True)
-        Cell('E5', (2, 3), reserve=True)
-        Cell('E6', (3, 3), reserve=True)
+        Cell('E0', (-3, 3), reserve=True, player=Player.BLACK)
+        Cell('E1', (-2, 3), reserve=True, player=Player.BLACK)
+        Cell('E2', (-1, 3), reserve=True, player=Player.BLACK)
+        Cell('E3', (0, 3), reserve=True, player=Player.BLACK)
+        Cell('E4', (1, 3), reserve=True, player=Player.BLACK)
+        Cell('E5', (2, 3), reserve=True, player=Player.BLACK)
+        Cell('E6', (3, 3), reserve=True, player=Player.BLACK)
 
 
 @enum.unique
@@ -890,6 +909,8 @@ class JersiState:
     __max_credit = 40
     __king_end_distances = None
     __center_cell_indices = None
+    __reserve_cell_by_cube = None
+    __prison_cell_by_cube = None
 
     __slots__ = ('__cube_status', '__cell_bottom', '__cell_top',
                  '__credit', '__player', '__turn',
@@ -919,6 +940,8 @@ class JersiState:
         self.__init_cube_status(play_reserve)
         self.__init_king_end_distances()
         self.__init_center_cell_indices()
+        self.__init_reserve_cell_by_cube()
+        self.__init_prison_cell_by_cube()
 
 
     def __fork(self):
@@ -978,13 +1001,13 @@ class JersiState:
 
         if play_reserve:
             # white reserve
-            self.__set_cube_at_cell_by_names('W1', 'A0')
-            self.__set_cube_at_cell_by_names('M1', 'A1')
+            self.__set_cube_at_cell_by_names('W1', 'A5')
+            self.__set_cube_at_cell_by_names('M1', 'A6')
 
 
             # black reserve
-            self.__set_cube_at_cell_by_names('w1', 'E6')
-            self.__set_cube_at_cell_by_names('m1', 'E5')
+            self.__set_cube_at_cell_by_names('w1', 'E5')
+            self.__set_cube_at_cell_by_names('m1', 'E6')
 
 
     def __init_king_end_distances(self):
@@ -1022,6 +1045,74 @@ class JersiState:
                                                          [Cell.get(name).index for name in center_names])
 
 
+    def __init_reserve_cell_by_cube(self):
+        
+        
+        def define_reserve_cell(cube_name, cell_name):
+            cube_index = Cube.get(cube_name).index
+            cell_index = Cell.get(cell_name).index
+            JersiState.__reserve_cell_by_cube[cube_index] = cell_index
+            
+        
+        if JersiState.__reserve_cell_by_cube is None:
+            JersiState.__reserve_cell_by_cube = array.array('b', [Null.CELL for _ in Cube.all])
+
+            # whites
+            define_reserve_cell('R1', 'A0')
+            define_reserve_cell('P1', 'A1')
+            define_reserve_cell('S1', 'A2')
+            define_reserve_cell('F1', 'A3')
+            define_reserve_cell('K1', 'A4')
+    
+            # blacks
+            define_reserve_cell('r1', 'E0')
+            define_reserve_cell('p1', 'E1')
+            define_reserve_cell('s1', 'E2')
+            define_reserve_cell('f1', 'E3')
+            define_reserve_cell('k1', 'E4')
+    
+            # white reserve
+            define_reserve_cell('W1', 'A5')
+            define_reserve_cell('M1', 'A6')
+
+            # black reserve
+            define_reserve_cell('w1', 'E5')
+            define_reserve_cell('m1', 'E6')
+        
+
+    def __init_prison_cell_by_cube(self):
+        
+        
+        def define_prison_cell(cube_name, cell_name):
+            cube_index = Cube.get(cube_name).index
+            cell_index = Cell.get(cell_name).index
+            JersiState.__prison_cell_by_cube[cube_index] = cell_index
+            
+        
+        if JersiState.__prison_cell_by_cube is None:
+            JersiState.__prison_cell_by_cube = array.array('b', [Null.CELL for _ in Cube.all])
+
+            # whites
+            define_prison_cell('R1', 'E0')
+            define_prison_cell('P1', 'E1')
+            define_prison_cell('S1', 'E2')
+            define_prison_cell('F1', 'E3')
+            define_prison_cell('K1', 'E4')
+    
+            # blacks
+            define_prison_cell('r1', 'A0')
+            define_prison_cell('p1', 'A1')
+            define_prison_cell('s1', 'A2')
+            define_prison_cell('f1', 'A3')
+            define_prison_cell('k1', 'A4')
+    
+            # white prison
+            define_prison_cell('W1', 'E5')
+
+            # black prison
+            define_prison_cell('w1', 'A5')
+        
+
     def __set_cube_at_cell_by_names(self, cube_name, cell_name):
         cube_index = Cube.get(cube_name).index
         cell_index = Cell.get(cell_name).index
@@ -1029,18 +1120,88 @@ class JersiState:
 
 
     def __set_cube_at_cell(self, cube_index, cell_index):
-
-        if self.__cell_bottom[cell_index] == Null.CUBE:
-            # cell has zero cube
-            self.__cell_bottom[cell_index] = cube_index
-
-        elif self.__cell_top[cell_index] == Null.CUBE:
-            # cell has one cube
-            self.__cell_top[cell_index] = cube_index
+        
+        cell = Cell.all[cell_index]
+        
+        if cell.reserve:
+            cube = Cube.all[cube_index]
+            
+            if cell.player == Player.WHITE:
+                
+                if cube.player == Player.WHITE:
+                    assert self.__cell_top[cell_index] == Null.CUBE
+                    self.__cell_top[cell_index] = cube_index            
+                
+                elif cube.player == Player.BLACK:
+                    assert self.__cell_bottom[cell_index] == Null.CUBE
+                    self.__cell_bottom[cell_index] = cube_index            
+                
+            
+            elif cell.player == Player.BLACK:
+                
+                if cube.player == Player.BLACK:
+                    assert self.__cell_bottom[cell_index] == Null.CUBE
+                    self.__cell_bottom[cell_index] = cube_index            
+                
+                elif cube.player == Player.WHITE:
+                    assert self.__cell_top[cell_index] == Null.CUBE
+                    self.__cell_top[cell_index] = cube_index  
+            
+            else:
+                assert cell.player is None
 
         else:
-            # cell is expected with either zero or one cube
-            assert False
+
+            if self.__cell_bottom[cell_index] == Null.CUBE:
+                # cell has zero cube
+                self.__cell_bottom[cell_index] = cube_index
+    
+            elif self.__cell_top[cell_index] == Null.CUBE:
+                # cell has one cube
+                self.__cell_top[cell_index] = cube_index
+    
+            else:
+                # cell is expected with either zero or one cube
+                assert False
+
+
+    def __set_cube_at_reserve(self, cube_index):
+        cell_index = JersiState.__reserve_cell_by_cube[cube_index]
+        self.__set_cube_at_cell(cube_index, cell_index)
+
+
+    def __set_cube_at_prison(self, cube_index):
+        cell_index = JersiState.__prison_cell_by_cube[cube_index]
+        self.__set_cube_at_cell(cube_index, cell_index)
+
+
+    def __manage_new_prisoner(self, cube_index):
+        assert self.__cube_status[cube_index] == CubeStatus.CAPTURED
+        
+        opposite_index = Cube.get_opposite_index(cube_index)
+        
+        if self.__cube_status[opposite_index] != CubeStatus.CAPTURED:
+            self.__set_cube_at_prison(cube_index)
+            
+        else:
+            # exchange the prisoners that return to their reserves
+            
+            opposite_cell_index = JersiState.__prison_cell_by_cube[opposite_index]
+            
+            if self.__cell_top[opposite_cell_index] == opposite_index:
+                self.__cell_top[opposite_cell_index] = Null.CUBE
+                
+            elif self.__cell_bottom[opposite_cell_index] == opposite_index:
+                self.__cell_bottom[opposite_cell_index] = Null.CUBE
+                
+            else:
+                assert False
+
+            self.__cube_status[cube_index] = CubeStatus.RESERVED            
+            self.__set_cube_at_reserve(cube_index)
+
+            self.__cube_status[opposite_index] = CubeStatus.RESERVED            
+            self.__set_cube_at_reserve(opposite_index)
 
 
     def show(self):
@@ -1547,24 +1708,12 @@ class JersiState:
     def __find_droppable_cubes(self):
         droppable_cubes = []
 
-        mountain_found = False
-        wise_found = False
-
         for (src_cube_index, src_cube_status) in enumerate(self.__cube_status):
             if src_cube_status == CubeStatus.RESERVED:
                 cube = Cube.all[src_cube_index]
                 if cube.player == self.__player:
+                    droppable_cubes.append(src_cube_index)
 
-                    if cube.sort == CubeSort.MOUNTAIN and not mountain_found:
-                        droppable_cubes.append(src_cube_index)
-                        mountain_found = True
-
-                    elif cube.sort == CubeSort.WISE and not wise_found:
-                        droppable_cubes.append(src_cube_index)
-                        wise_found = True
-
-                    if mountain_found and wise_found:
-                        break
         return droppable_cubes
 
 
@@ -1629,9 +1778,6 @@ class JersiState:
         notation = Notation.drop_cube(src_cube_label, dst_cell_name, previous_action=previous_action)
 
         if src_cube.player != self.__player:
-            action = None
-
-        elif src_cube.sort not in (CubeSort.MOUNTAIN, CubeSort.WISE):
             action = None
 
         elif self.__cube_status[src_cube_index] != CubeStatus.RESERVED:
@@ -1818,6 +1964,9 @@ class JersiState:
                     else:
                         state.__cell_bottom[src_cell_index] = Null.CUBE
                     state.__cell_bottom[dst_cell_index] = src_cube_index
+                    
+                    if capture == Capture.SOME_CUBE:
+                        state.__manage_new_prisoner(dst_bottom_index)
 
                     notation = Notation.move_cube(src_cell_name, dst_cell_name, capture=capture, previous_action=previous_action)
                     action = JersiAction(notation, state, capture=capture, previous_action=previous_action)
@@ -1873,6 +2022,9 @@ class JersiState:
                 else:
                     state.__cell_bottom[src_cell_index] = Null.CUBE
                 state.__cell_top[dst_cell_index] = src_cube_index
+                    
+                if capture == Capture.SOME_CUBE:
+                    state.__manage_new_prisoner(dst_top_index)
 
                 notation = Notation.move_cube(src_cell_name, dst_cell_name, capture=capture, previous_action=previous_action)
                 action = JersiAction(notation, state, capture=capture, previous_action=previous_action)
@@ -1897,6 +2049,12 @@ class JersiState:
                 else:
                     state.__cell_bottom[src_cell_index] = Null.CUBE
                 state.__cell_bottom[dst_cell_index] = src_cube_index
+                    
+                if capture == Capture.SOME_STACK:
+                    state.__manage_new_prisoner(dst_top_index)
+                    state.__manage_new_prisoner(dst_bottom_index)
+                else:
+                    state.__manage_new_prisoner(dst_bottom_index)
 
                 notation = Notation.move_cube(src_cell_name, dst_cell_name, capture=capture, previous_action=previous_action)
                 action = JersiAction(notation, state, capture=capture, previous_action=previous_action)
@@ -1967,6 +2125,9 @@ class JersiState:
                 state.__cell_bottom[dst_cell_index] = src_bottom_index
                 state.__cell_top[dst_cell_index] = src_top_index
 
+                if capture == Capture.SOME_CUBE:
+                    state.__manage_new_prisoner(dst_bottom_index)
+
                 notation = Notation.move_stack(src_cell_name, dst_cell_name, capture=capture, previous_action=previous_action)
                 action = JersiAction(notation, state, capture=capture, previous_action=previous_action)
 
@@ -2010,6 +2171,12 @@ class JersiState:
 
                 state.__cell_bottom[dst_cell_index] = src_bottom_index
                 state.__cell_top[dst_cell_index] = src_top_index
+
+                if capture == Capture.SOME_STACK:
+                    state.__manage_new_prisoner(dst_top_index)
+                    state.__manage_new_prisoner(dst_bottom_index)
+                else:
+                    state.__manage_new_prisoner(dst_bottom_index)
 
                 notation = Notation.move_stack(src_cell_name, dst_cell_name, capture=capture, previous_action=previous_action)
                 action = JersiAction(notation, state, capture=capture, previous_action=previous_action)

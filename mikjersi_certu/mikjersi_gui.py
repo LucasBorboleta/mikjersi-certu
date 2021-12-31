@@ -1001,15 +1001,24 @@ class GameGui(ttk.Frame):
             elif top_index != rules.Null.CUBE:
 
                 top = rules.Cube.all[top_index]
-
-                self.__draw_cube(name=cell.name, config=CubeLocation.MIDDLE,
+                
+                if cell.reserve:
+                    self.__draw_cube(name=cell.name, config=CubeLocation.TOP,
+                               cube_color=top.player, cube_sort=top.sort, cube_label=top.label)
+                
+                else:
+                    self.__draw_cube(name=cell.name, config=CubeLocation.MIDDLE,
                                cube_color=top.player, cube_sort=top.sort, cube_label=top.label)
 
             elif bottom_index != rules.Null.CUBE:
 
                 bottom = rules.Cube.all[bottom_index]
-
-                self.__draw_cube(name=cell.name, config=CubeLocation.MIDDLE,
+                
+                if cell.reserve:
+                    self.__draw_cube(name=cell.name, config=CubeLocation.BOTTOM,
+                               cube_color=bottom.player, cube_sort=bottom.sort, cube_label=bottom.label)
+                else:
+                    self.__draw_cube(name=cell.name, config=CubeLocation.MIDDLE,
                                cube_color=bottom.player, cube_sort=bottom.sort, cube_label=bottom.label)
 
             else:
