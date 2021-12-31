@@ -386,7 +386,7 @@ class GameGui(ttk.Frame):
         self.__root = tk.Tk()
 
         try:
-            self.__root.title("mikjersi-certu : for playing the mikjersi 4 boardgame and testing AI agents")
+            self.__root.title("mikjersi-certu : for playing the mikjersi 1.0 boardgame and testing AI agents")
             self.__root.iconbitmap(AppConfig.ICON_FILE)
         except:
             pass
