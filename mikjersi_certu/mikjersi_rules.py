@@ -2338,7 +2338,7 @@ def mikjersiSelectAction(action_names):
     move_names = list(move_names)
     assert len(drop_names) + len(move_names) != 0
 
-    drop_probability = 0.05
+    drop_probability = 0.25
 
     if len(drop_names) != 0 and random.random() <= drop_probability:
         action_name = random.choice(drop_names)
@@ -2456,7 +2456,7 @@ class RandomSearcher():
             action = random.choice(drop_actions)
 
         else:
-            drop_probability = 0.05
+            drop_probability = 0.25
 
             if len(drop_actions) != 0 and random.random() <= drop_probability:
                 action = random.choice(drop_actions)
@@ -2720,7 +2720,7 @@ class MinimaxSearcher():
 
                 # >> let us admit some tolerance regarding the __max_children criterion
                 # >> by adding a small fraction of drop actions
-                drop_probability = 0.05
+                drop_probability = 0.25
                 drop_count = max(drop_count, int(math.ceil(drop_probability*len(move_actions))))
 
                 drop_actions = random.choices(drop_actions, k=drop_count)
