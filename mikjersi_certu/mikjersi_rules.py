@@ -2872,6 +2872,8 @@ SEARCHER_CATALOG.add( MinimaxSearcher("minimax2-400", max_depth=2, max_children=
 SEARCHER_CATALOG.add( MinimaxSearcher("minimax3", max_depth=3) )
 SEARCHER_CATALOG.add( MinimaxSearcher("minimax3-400", max_depth=3, max_children=400) )
 
+SEARCHER_CATALOG.add( MctsSearcher("mcts-30s-jrp", time_limit=30_000, rolloutPolicy=mikjersiRandomPolicy) )
+SEARCHER_CATALOG.add( MctsSearcher("mcts-60s-jrp", time_limit=60_000, rolloutPolicy=mikjersiRandomPolicy) )
 SEARCHER_CATALOG.add( MctsSearcher("mcts-90s-jrp", time_limit=90_000, rolloutPolicy=mikjersiRandomPolicy) )
 
 
