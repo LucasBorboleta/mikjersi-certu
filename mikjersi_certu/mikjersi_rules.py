@@ -912,13 +912,16 @@ class JersiState:
     __reserve_cell_by_cube = None
     __prison_cell_by_cube = None
 
-    __slots__ = ('__cube_status', '__cell_bottom', '__cell_top',
+    __slots__ = ('__play_reserve', '__cube_status', '__cell_bottom', '__cell_top',
                  '__credit', '__player', '__turn',
                  '__actions', '__actions_by_simple_names', '__actions_by_names',
                  '__taken', '__terminal_case', '__terminated', '__rewards')
 
 
     def __init__(self, play_reserve=True):
+        
+        
+        self.__play_reserve = play_reserve
 
         self.__cube_status = None
         self.__cell_bottom = None
@@ -936,8 +939,8 @@ class JersiState:
         self.__terminated = None
         self.__rewards = None
 
-        self.__init_cell_top_and_bottom(play_reserve)
-        self.__init_cube_status(play_reserve)
+        self.__init_cell_top_and_bottom()
+        self.__init_cube_status()
         self.__init_king_end_distances()
         self.__init_center_cell_indices()
         self.__init_reserve_cell_by_cube()
@@ -963,14 +966,14 @@ class JersiState:
         return state
 
 
-    def __init_cube_status(self, play_reserve):
+    def __init_cube_status(self):
 
         self.__cube_status = array.array('b', [CubeStatus.ACTIVATED for _ in Cube.all])
 
         for (cube_index, cube) in enumerate(Cube.all):
 
             if cube.sort in (CubeSort.MOUNTAIN, CubeSort.WISE):
-                if play_reserve:
+                if self.__play_reserve:
                     self.__cube_status[cube_index] = CubeStatus.RESERVED
                 else:
                     self.__cube_status[cube_index] = CubeStatus.UNUSED
@@ -979,7 +982,7 @@ class JersiState:
                 self.__cube_status[cube_index] = CubeStatus.UNUSED
 
 
-    def __init_cell_top_and_bottom(self, play_reserve):
+    def __init_cell_top_and_bottom(self):
 
         self.__cell_top = array.array('b', [Null.CUBE for _ in Cell.all])
         self.__cell_bottom = array.array('b', [Null.CUBE for _ in Cell.all])
@@ -999,11 +1002,10 @@ class JersiState:
         self.__set_cube_at_cell_by_names('f1', 'e2')
         self.__set_cube_at_cell_by_names('k1', 'e1')
 
-        if play_reserve:
+        if self.__play_reserve:
             # white reserve
             self.__set_cube_at_cell_by_names('W1', 'A5')
             self.__set_cube_at_cell_by_names('M1', 'A6')
-
 
             # black reserve
             self.__set_cube_at_cell_by_names('w1', 'E5')
@@ -1038,8 +1040,8 @@ class JersiState:
         if JersiState.__center_cell_indices is None:
 
             center_names = ['b2', 'b3', 'b4',
-                              'c2', 'c3', 'c4',
-                              'd2', 'd3', 'd4']
+                            'c2', 'c3', 'c4',
+                            'd2', 'd3', 'd4']
 
             JersiState.__center_cell_indices = array.array('b',
                                                          [Cell.get(name).index for name in center_names])
@@ -1177,10 +1179,10 @@ class JersiState:
 
     def __manage_new_prisoner(self, cube_index):
         assert self.__cube_status[cube_index] == CubeStatus.CAPTURED
-        
+
         opposite_index = Cube.get_opposite_index(cube_index)
         
-        if self.__cube_status[opposite_index] != CubeStatus.CAPTURED:
+        if not self.__play_reserve or self.__cube_status[opposite_index] != CubeStatus.CAPTURED:
             self.__set_cube_at_prison(cube_index)
             
         else:
