@@ -18,12 +18,15 @@ You should have received a copy of the GNU General Public License along with thi
 
 
 import enum
+import glob
 import math
 import os
+import shutil
 import sys
 
 from PIL import Image
 from PIL import ImageTk
+from PIL import ImageGrab
 
 import tkinter as tk
 from tkinter import font
@@ -45,6 +48,9 @@ def rgb_color_as_hexadecimal(rgb_triplet):
 class AppConfig:
     # File path containing the icon to be displayed in the title bar of Mikjersi GUI
     ICON_FILE = os.path.join(_package_home, 'pictures', 'mikjersi.ico')
+
+    # Directory path of a working directory for pictures
+    TMP_PICTURE_DIR = os.path.join(_package_home, 'tmp-pictures')
 
 
 class TinyVector:
@@ -372,6 +378,9 @@ class GameGui(ttk.Frame):
         self.__play_reserve = True
         self.__edit_actions = False
         self.__turn_states = list()
+        
+        self.__do_make_state_picture = False
+        self.__state_picture_index = 0   
 
         self.__game = None
         self.__game_started = False
@@ -933,6 +942,7 @@ class GameGui(ttk.Frame):
                 self.__game.next_turn()
                 self.__mikjersi_state = self.__game.get_state()
                 self.__draw_state()
+                self.__make_state_picture()
 
                 self.__variable_summary.set(self.__game.get_summary())
                 self.__variable_log.set(self.__game.get_log())
@@ -967,6 +977,68 @@ class GameGui(ttk.Frame):
            self.__button_edit_actions.config(state="enabled")
            self.__edit_actions = False
            self.__variable_edit_actions.set(self.__edit_actions)
+           
+           self.__make_animated_state_picture()
+
+
+
+    def __make_state_picture(self):
+        if self.__do_make_state_picture:
+
+            assert self.__game is not None
+            turn = self.__game.get_turn()
+            assert turn >= 1
+            
+            if turn == 1:
+                if os.path.isdir(AppConfig.TMP_PICTURE_DIR):
+                    shutil.rmtree(AppConfig.TMP_PICTURE_DIR)
+                os.mkdir(AppConfig.TMP_PICTURE_DIR)
+                
+                self.__state_picture_index = 0
+                
+                
+            if turn >  self.__state_picture_index:
+                
+                state_export_path = os.path.join(AppConfig.TMP_PICTURE_DIR, "state-%3.3d" % turn)    
+    
+                state_png_file = state_export_path + '.png'
+                
+                x = self.__canvas.winfo_rootx()
+                y = self.__canvas.winfo_rooty()
+                w = self.__canvas.winfo_width()
+                h = self.__canvas.winfo_height()
+                
+                left = x
+                right = x + w
+                upper = y
+                lower = y + h
+                                
+                canevas_bbox = (left, upper, right, lower)
+         
+                image = ImageGrab.grab(bbox=canevas_bbox)
+                image.save(state_png_file)
+                self.__state_picture_index = turn   
+ 
+    
+    def __make_animated_state_picture(self):
+         if self.__do_make_state_picture:
+             if os.path.isdir(AppConfig.TMP_PICTURE_DIR):
+ 
+                frames = []
+                image_list = glob.glob(os.path.join(AppConfig.TMP_PICTURE_DIR, "state-*"))
+                
+                if len(image_list) != 0:
+                    for image in image_list:
+                        new_frame = Image.open(image)
+                        frames.append(new_frame)
+                     
+                    # Save into a GIF file that loops forever
+                    frames[0].save(os.path.join(AppConfig.TMP_PICTURE_DIR, "all-states.gif"), 
+                                   format='GIF',
+                                   append_images=frames[1:],
+                                   save_all=True,
+                                   duration=1_500, loop=0)
+
 
     ### Drawer iterators
 
@@ -975,7 +1047,7 @@ class GameGui(ttk.Frame):
         self.__canvas.delete('all')
         self.__draw_all_cells()
         self.__draw_all_cubes()
-
+        
 
     def __draw_all_cubes(self):
 
