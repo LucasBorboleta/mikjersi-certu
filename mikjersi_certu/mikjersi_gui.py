@@ -1003,19 +1003,26 @@ class GameGui(ttk.Frame):
     
                 state_png_file = state_export_path + '.png'
                 
-                x = self.__canvas.winfo_rootx()
-                y = self.__canvas.winfo_rooty()
-                w = self.__canvas.winfo_width()
-                h = self.__canvas.winfo_height()
+                grab_canvas_only = True
                 
-                left = x
-                right = x + w
-                upper = y
-                lower = y + h
-                                
-                canevas_bbox = (left, upper, right, lower)
+                if grab_canvas_only:
+                
+                    x = self.__canvas.winfo_rootx()
+                    y = self.__canvas.winfo_rooty()
+                    w = self.__canvas.winfo_width()
+                    h = self.__canvas.winfo_height()
+                    
+                    left = x
+                    right = x + w
+                    upper = y
+                    lower = y + h
+                                    
+                    picture_bbox = (left, upper, right, lower)
+                    
+                else:
+                    picture_bbox = None
          
-                image = ImageGrab.grab(bbox=canevas_bbox)
+                image = ImageGrab.grab(bbox=picture_bbox)
                 image.save(state_png_file)
                 self.__state_picture_index = turn   
  
@@ -1037,7 +1044,7 @@ class GameGui(ttk.Frame):
                                    format='GIF',
                                    append_images=frames[1:],
                                    save_all=True,
-                                   duration=1_500, loop=0)
+                                   duration=500, loop=0)
 
 
     ### Drawer iterators
