@@ -33,8 +33,8 @@ import mcts
 
 _do_debug = False
 
-INFINITY_POSITIVE = float("inf")
-INFINITY_NEGATIVE = float("-inf")
+INFINITY_POSITIVE = math.inf
+INFINITY_NEGATIVE = -math.inf
 
 
 def chunks(sequence, chunk_count):
@@ -1032,7 +1032,6 @@ class JersiState:
                                             cell_distance(king_position_uv, cell_position_uv))
 
                     JersiState.__king_end_distances[player][king_cell_index] = int(math.ceil(king_distance))
-
 
 
     def __init_center_cell_indices(self):
@@ -2469,22 +2468,30 @@ class RandomSearcher():
 class MinimaxSearcher():
 
     __slots__ = ('__name', '__max_depth', '__max_children',
-                 '__distance_weight', '__capture_weight', '__center_weight')
+                 '__distance_weight', '__capture_weight', 
+                 '__fighter_weight', '__reserve_weight',
+                 '__center_weight')
 
 
     default_weights_by_depth = dict()
 
-    default_weights_by_depth[1] = {'distance_weight':100,
-                                   'capture_weight':1_200,
-                                   'center_weight':400}
+    default_weights_by_depth[1] = {'distance_weight':16,
+                                   'capture_weight':8,
+                                   'fighter_weight':4,
+                                   'center_weight':2,
+                                   'reserve_weight':1}
 
-    default_weights_by_depth[2] = {'distance_weight':100,
-                                   'capture_weight':1_600,
-                                   'center_weight':100}
+    default_weights_by_depth[2] = {'distance_weight':16,
+                                   'capture_weight':8,
+                                   'fighter_weight':4,
+                                   'center_weight':2,
+                                   'reserve_weight':1}
 
 
     def __init__(self, name, max_depth=1, max_children=None,
-                  distance_weight=None, capture_weight=None, center_weight=None):
+                  distance_weight=None, capture_weight=None,
+                  fighter_weight=None, reserve_weight=None,
+                  center_weight=None):
 
         assert max_depth >= 1
 
@@ -2509,6 +2516,18 @@ class MinimaxSearcher():
             self.__capture_weight = capture_weight
         else:
             self.__capture_weight = default_weights['capture_weight']
+
+
+        if fighter_weight is not None:
+            self.__fighter_weight = fighter_weight
+        else:
+            self.__fighter_weight = default_weights['fighter_weight']
+
+
+        if reserve_weight is not None:
+            self.__reserve_weight = reserve_weight
+        else:
+            self.__reserve_weight = default_weights['reserve_weight']
 
 
         if center_weight is not None:
@@ -2577,48 +2596,21 @@ class MinimaxSearcher():
 
         else:
 
-            # white and black activated fighters are used as indicators of parts of the game:
-            # opening part, middle part and final part
-            fighter_counts = mikjersi_state.get_fighter_counts()
-
-            if fighter_counts[Player.BLACK] == 0:
-                white_distance_importance = 1000
-                white_capture_importance = 0
-                white_center_importance = 0
-
-            elif fighter_counts[Player.BLACK] <= 5:
-                white_distance_importance = 10
-                white_capture_importance = 10
-                white_center_importance = 1
-
-            else:
-                white_distance_importance = 1
-                white_capture_importance = 1
-                white_center_importance = 1
-
-
-            if fighter_counts[Player.WHITE] == 0:
-                black_distance_importance = 1000
-                black_capture_importance = 0
-                black_center_importance = 0
-
-            elif fighter_counts[Player.WHITE] <= 5:
-                black_distance_importance = 10
-                black_capture_importance = 10
-                black_center_importance = 1
-
-            else:
-                black_distance_importance = 1
-                black_capture_importance = 1
-                black_center_importance = 1
-
             # white and black distances to their goals or ends
             king_distances = mikjersi_state.get_king_end_distances()
             distance_difference = player_sign*(king_distances[Player.BLACK] - king_distances[Player.WHITE])
 
             # white and black with captured status
             capture_counts = mikjersi_state.get_capture_counts()
-            capture_difference = player_sign*(capture_counts[Player.BLACK] - capture_counts[Player.WHITE])
+            capture_difference = player_sign*(capture_counts[Player.WHITE] - capture_counts[Player.BLACK])
+
+            # white and black with active fighters status
+            fighter_counts = mikjersi_state.get_fighter_counts()
+            fighter_difference = player_sign*(fighter_counts[Player.WHITE] - fighter_counts[Player.BLACK])
+
+            # white and black with reserved status
+            reserve_counts = mikjersi_state.get_reserve_counts()     
+            reserve_difference = player_sign*(reserve_counts[Player.WHITE] - reserve_counts[Player.BLACK])
 
             # white and black fighter cubes in the central zone
             white_center_count = 0
@@ -2645,23 +2637,36 @@ class MinimaxSearcher():
 
             # normalize each feature in the intervall [-1, +1]
 
-            distance_norm = 8
-            capture_norm = 16
-            center_norm = 17
+            distance_norm = 4
+            capture_norm = 5
+            fighter_norm = 4
+            reserve_norm = 6
+            center_norm = 9
+            
+            assert distance_difference <= distance_norm
+            assert -distance_difference <= distance_norm
+            
+            assert capture_difference <= capture_norm
+            assert -capture_difference <= capture_norm
+            
+            assert fighter_difference <= fighter_norm
+            assert -fighter_difference <= fighter_norm
+            
+            assert center_difference <= center_norm
+            assert -center_difference <= center_norm
 
             distance_difference = distance_difference/distance_norm
             capture_difference = capture_difference/capture_norm
+            fighter_difference = fighter_difference/fighter_norm
+            reserve_difference = reserve_difference/reserve_norm
             center_difference = center_difference/center_norm
-
-            # account for importances
-            distance_difference *= white_distance_importance*black_distance_importance
-            capture_difference *= white_capture_importance*black_capture_importance
-            center_difference *= white_center_importance*black_center_importance
-
+            
             # synthesis
 
             value += self.__distance_weight*distance_difference
             value += self.__capture_weight*capture_difference
+            value += self.__fighter_weight*fighter_difference
+            value += self.__reserve_weight*reserve_difference
             value += self.__center_weight*center_difference
 
         return value
@@ -2864,13 +2869,9 @@ SEARCHER_CATALOG.add( HumanSearcher("human") )
 SEARCHER_CATALOG.add( RandomSearcher("random") )
 
 SEARCHER_CATALOG.add( MinimaxSearcher("minimax1", max_depth=1) )
-SEARCHER_CATALOG.add( MinimaxSearcher("minimax1-400", max_depth=1, max_children=400) )
-
 SEARCHER_CATALOG.add( MinimaxSearcher("minimax2", max_depth=2) )
-SEARCHER_CATALOG.add( MinimaxSearcher("minimax2-400", max_depth=2, max_children=400) )
-
 SEARCHER_CATALOG.add( MinimaxSearcher("minimax3", max_depth=3) )
-SEARCHER_CATALOG.add( MinimaxSearcher("minimax3-400", max_depth=3, max_children=400) )
+SEARCHER_CATALOG.add( MinimaxSearcher("minimax4", max_depth=4) )
 
 SEARCHER_CATALOG.add( MctsSearcher("mcts-30s-jrp", time_limit=30_000, rolloutPolicy=mikjersiRandomPolicy) )
 SEARCHER_CATALOG.add( MctsSearcher("mcts-60s-jrp", time_limit=60_000, rolloutPolicy=mikjersiRandomPolicy) )
