@@ -2475,14 +2475,14 @@ class MinimaxSearcher():
 
     default_weights_by_depth = dict()
 
-    default_weights_by_depth[1] = {'distance_weight':8,
-                                   'capture_weight':16,
+    default_weights_by_depth[1] = {'distance_weight':16,
+                                   'capture_weight':8,
                                    'fighter_weight':4,
                                    'center_weight':2,
                                    'reserve_weight':1}
 
-    default_weights_by_depth[2] = {'distance_weight':8,
-                                   'capture_weight':16,
+    default_weights_by_depth[2] = {'distance_weight':16,
+                                   'capture_weight':8,
                                    'fighter_weight':4,
                                    'center_weight':2,
                                    'reserve_weight':1}
