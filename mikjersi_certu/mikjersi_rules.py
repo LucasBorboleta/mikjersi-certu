@@ -2602,7 +2602,7 @@ class MinimaxSearcher():
 
             # white and black with captured status
             capture_counts = mikjersi_state.get_capture_counts()
-            capture_difference = player_sign*(capture_counts[Player.WHITE] - capture_counts[Player.BLACK])
+            capture_difference = player_sign*(capture_counts[Player.BLACK] - capture_counts[Player.WHITE])
 
             # white and black with active fighters status
             fighter_counts = mikjersi_state.get_fighter_counts()
