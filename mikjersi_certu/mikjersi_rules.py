@@ -2885,7 +2885,9 @@ class MinimaxSearcher():
         if return_action_values:
             action_values = dict()
 
-        actions = state.get_actions(shuffle=False)
+        # >> alphabeta will return only the first high valued action,
+        # >> so shuffling may vary the alphabeta return
+        actions = state.get_actions(shuffle=True)
         actions = self.reduce_actions(actions)
         if use_sort:
             self.sort_actions(actions)
@@ -3096,8 +3098,6 @@ SEARCHER_CATALOG.add( MinimaxSearcher("minimax2", max_depth=2) )
 SEARCHER_CATALOG.add( MinimaxSearcher("minimax3", max_depth=3) )
 SEARCHER_CATALOG.add( MinimaxSearcher("minimax4", max_depth=4) )
 
-SEARCHER_CATALOG.add( MctsSearcher("mcts-30s-jrp", time_limit=30_000, rolloutPolicy=mikjersiRandomPolicy) )
-SEARCHER_CATALOG.add( MctsSearcher("mcts-60s-jrp", time_limit=60_000, rolloutPolicy=mikjersiRandomPolicy) )
 SEARCHER_CATALOG.add( MctsSearcher("mcts-90s-jrp", time_limit=90_000, rolloutPolicy=mikjersiRandomPolicy) )
 
 
@@ -3313,28 +3313,15 @@ def test_game_between_minimax_players():
 
 
     searcher_dict = dict()
+    searcher_dict["random"] = RandomSearcher("random")
 
-    capture_weight_list = [1200, 1400, 1600]
-    center_weight_list = [0, 100, 200, 400]
+    max_depth_list = [1, 2, 3]
 
-    for capture_weight in capture_weight_list:
-        for center_weight in center_weight_list:
-            searcher_name = "minimax2-%d-%d" % (capture_weight, center_weight)
-            searcher = MinimaxSearcher(searcher_name,
-                                        max_depth=2,
-                                        capture_weight=capture_weight,
-                                        center_weight=center_weight)
-            assert searcher_name not in searcher_dict
-            searcher_dict[searcher_name] = searcher
-
-
-    (capture_weight, center_weight) = (1200, 400)
-    searcher_name = "minimax1-%d-%d" % (capture_weight, center_weight)
-    searcher = MinimaxSearcher(searcher_name,
-                                max_depth=1,
-                                capture_weight=capture_weight,
-                                center_weight=center_weight)
-    searcher_dict[searcher_name] = searcher
+    for max_depth in max_depth_list:
+        searcher_name = "minimax%d" % max_depth
+        searcher = MinimaxSearcher(searcher_name, max_depth=max_depth)
+        assert searcher_name not in searcher_dict
+        searcher_dict[searcher_name] = searcher
 
     searcher_points = collections.Counter()
 
@@ -3345,13 +3332,10 @@ def test_game_between_minimax_players():
             if x_searcher is y_searcher:
                 continue
 
-
             x_points = 0
             y_points = 0
 
-
             for game_index in range(game_count):
-
 
                 game = Game()
                 game.set_white_searcher(x_searcher)
@@ -3384,7 +3368,6 @@ def test_game_between_minimax_players():
 
             searcher_points[x_searcher.get_name()] += x_points
             searcher_points[y_searcher.get_name()] += y_points
-
 
     print()
     for (searcher_name, points) in sorted(searcher_points.items()):
