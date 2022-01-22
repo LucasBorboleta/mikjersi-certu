@@ -1329,6 +1329,10 @@ class JersiState:
         return summary
 
 
+    def get_credit(self):
+        return self.__credit
+
+
     @staticmethod
     def get_max_credit():
         return JersiState.__max_credit
@@ -2464,29 +2468,31 @@ class MinimaxSearcher():
     __slots__ = ('__name', '__max_depth', '__max_children',
                  '__distance_weight', '__capture_weight', 
                  '__fighter_weight', '__reserve_weight',
-                 '__center_weight',
+                 '__center_weight', '__credit_weight',
                  '__debug')
 
 
     default_weights_by_depth = dict()
 
-    default_weights_by_depth[1] = {'distance_weight':16,
-                                   'capture_weight':8,
-                                   'fighter_weight':4,
-                                   'center_weight':2,
-                                   'reserve_weight':1}
+    default_weights_by_depth[1] = {'distance_weight':32,
+                                   'capture_weight':16,
+                                   'fighter_weight':8,
+                                   'center_weight':4,
+                                   'reserve_weight':2,
+                                   'credit_weight':1}
 
-    default_weights_by_depth[2] = {'distance_weight':16,
-                                   'capture_weight':8,
-                                   'fighter_weight':4,
-                                   'center_weight':2,
-                                   'reserve_weight':1}
+    default_weights_by_depth[2] = {'distance_weight':32,
+                                   'capture_weight':16,
+                                   'fighter_weight':8,
+                                   'center_weight':4,
+                                   'reserve_weight':2,
+                                   'credit_weight':1}
 
 
     def __init__(self, name, max_depth=1, max_children=None,
                   distance_weight=None, capture_weight=None,
                   fighter_weight=None, reserve_weight=None,
-                  center_weight=None):
+                  center_weight=None, credit_weight=None):
 
         self.__debug = False
 
@@ -2515,6 +2521,12 @@ class MinimaxSearcher():
             self.__capture_weight = default_weights['capture_weight']
 
 
+        if center_weight is not None:
+            self.__center_weight = center_weight
+        else:
+            self.__center_weight = default_weights['center_weight']
+
+
         if fighter_weight is not None:
             self.__fighter_weight = fighter_weight
         else:
@@ -2527,10 +2539,10 @@ class MinimaxSearcher():
             self.__reserve_weight = default_weights['reserve_weight']
 
 
-        if center_weight is not None:
-            self.__center_weight = center_weight
+        if credit_weight is not None:
+            self.__credit_weight = credit_weight
         else:
-            self.__center_weight = default_weights['center_weight']
+            self.__credit_weight = default_weights['credit_weight']
 
 
     def get_name(self):
@@ -2696,6 +2708,11 @@ class MinimaxSearcher():
 
             center_difference = minimax_maximizer_sign*(white_center_count - black_center_count)
 
+
+            # credit acts symmetrically for white and black
+            credit = mikjersi_state.get_credit()
+
+
             # normalize each feature in the intervall [-1, +1]
 
             distance_norm = 4
@@ -2703,6 +2720,7 @@ class MinimaxSearcher():
             fighter_norm = 4
             reserve_norm = 6
             center_norm = 9
+            credit_norm = JersiState.get_max_credit()
             
             assert distance_difference <= distance_norm
             assert -distance_difference <= distance_norm
@@ -2716,11 +2734,16 @@ class MinimaxSearcher():
             assert center_difference <= center_norm
             assert -center_difference <= center_norm
 
+            assert credit <= credit_norm
+            assert -credit <= credit_norm
+
+
             distance_difference = distance_difference/distance_norm
             capture_difference = capture_difference/capture_norm
             fighter_difference = fighter_difference/fighter_norm
             reserve_difference = reserve_difference/reserve_norm
             center_difference = center_difference/center_norm
+            credit = credit/center_norm
             
             # synthesis
 
@@ -2729,6 +2752,7 @@ class MinimaxSearcher():
             value += self.__fighter_weight*fighter_difference
             value += self.__reserve_weight*reserve_difference
             value += self.__center_weight*center_difference
+            value += self.__credit_weight*credit
 
         return value
 
