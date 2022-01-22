@@ -2977,6 +2977,147 @@ class MinimaxSearcher():
             return state_value
 
 
+    def pvs(self, state, player, depth=None, alpha=None, beta=None, return_action_values=False):
+
+        assert False
+        # >> Method "pvs" to be used only when the null windows principle will be understood 
+        # >> and checked against minimax !        
+
+        use_sort = True
+
+        if alpha is None:
+            alpha = -math.inf
+
+        if beta is None:
+            beta = math.inf
+
+        if depth is None:
+            depth = self.__max_depth
+            
+        assert alpha <= beta
+
+        if depth == 0 or state.is_terminal():
+            state_value = self.state_value(state, depth)
+            
+            if self.__debug:
+                print()
+                print("pvs at depth %d evaluates leaf state %d with value %f" % 
+                      (depth, id(state),  state_value))
+                
+            return state_value
+
+        if return_action_values:
+            action_values = dict()
+
+        if self.__debug:
+            print()
+            print("pvs at depth %d evaluates state %d ..." % (depth, id(state)))           
+
+        assert player == -1 or player == 1
+        
+        if player == -1:
+            assert not return_action_values
+
+        if return_action_values:
+            action_values = dict()
+
+        # >> pvs will return only the first high valued action,
+        # >> so shuffling may vary the alphabeta return
+        actions = state.get_actions(shuffle=True)
+        actions = self.reduce_actions(actions)
+        if use_sort:
+            self.sort_actions(actions)
+            
+        pvs_window = 1
+        
+        if player == 1:
+            
+            state_value = -math.inf
+            
+            for (action_index, action) in enumerate(actions):
+                child_state = state.take_action(action)
+                
+                if action_index == 0:
+                    child_value = self.pvs(state=child_state, player=-player, depth=depth - 1,
+                                              alpha=alpha, beta=beta)
+                    
+                else:
+                    print("--- maximizer: null window ...")
+                    child_value = self.pvs(state=child_state, player=-player, depth=depth - 1,
+                                              alpha=alpha - pvs_window, beta=alpha + pvs_window)
+                    
+                    if (alpha < child_value < beta):
+                        print("--- maximizer: null window succeeded")
+                    else:
+                        print("--- maximizer: null window failed; full re-search")
+                        child_value = self.pvs(state=child_state, player=-player, depth=depth - 1,
+                                              alpha=alpha, beta=beta)
+                           
+                if return_action_values:
+                    action_values[action] = child_value
+                    
+                state_value = max(state_value, child_value)    
+                
+                if state_value >= beta:
+                    if self.__debug:
+                        print("--- maximizer: beta cut-off")
+                    break
+                        
+                alpha = max(alpha, state_value)    
+
+        elif player == -1:
+            
+            state_value = math.inf
+            
+            for (action_index, action) in enumerate(actions):
+                child_state = state.take_action(action)
+                
+                if action_index == 0:
+                    child_value = self.pvs(state=child_state, player=-player, depth=depth - 1,
+                                              alpha=alpha, beta=beta)
+                    
+                else:
+                    print("--- minimizer: null window ...")
+                    child_value = self.pvs(state=child_state, player=-player, depth=depth - 1,
+                                              alpha=beta - pvs_window, beta=beta + pvs_window)
+                    
+                    if (alpha < child_value < beta):
+                        print("--- minimizer: null window succeeded")
+                    else:
+                        print("--- minimizer: null window failed; full re-search")
+                        child_value = self.pvs(state=child_state, player=-player, depth=depth - 1,
+                                              alpha=alpha, beta=beta)
+
+    
+                state_value = min(state_value, child_value)    
+                
+                if state_value <= alpha:
+                    if self.__debug:
+                        print("--- minimizer: alpha cut-off")
+                    
+                    if depth == (self.__max_depth - 1):
+                        if state_value == alpha and action_index != (len(actions) - 1):
+                            # >> prevent final return of actions with falsely equal values due to cut-off
+                            # >> rationale: without cut-off it could be that state_value < alpha 
+                            state_value -= 1/OMEGA
+                            assert state_value < alpha
+                            if self.__debug:
+                                print("--- minimizer: force state_value < alpha")
+                    
+                    break
+                        
+                beta = min(beta, state_value)    
+
+        if self.__debug:
+            print()
+            print("pvs at depth %d evaluates state %d with value %f" % (depth, id(state), state_value))           
+     
+        if return_action_values:
+            return (state_value, action_values)
+        else:
+            return state_value
+
+
     def negamax(self, state, player, depth=None, return_action_values=False):
 
         if depth is None:
