@@ -379,8 +379,8 @@ class GameGui(ttk.Frame):
         self.__edit_actions = False
         self.__turn_states = list()
         
-        self.__do_make_state_picture = False
-        self.__state_picture_index = 0   
+        self.__do_take_picture = False
+        self.__picture_index = 0   
 
         self.__game = None
         self.__game_started = False
@@ -588,6 +588,15 @@ class GameGui(ttk.Frame):
         self.__spinbox_turn.bind('<Return>', self.__command_update_turn)
 
 
+        self.__variable_take_pictures = tk.BooleanVar()
+        self.__variable_take_pictures.set(self.__do_take_picture)
+        self.__button_take_pictures = ttk.Checkbutton (self.__frame_human_actions,
+                                       text='Take pictures',
+                                       command=self.__command_update_take_pictures,
+                                       variable=self.__variable_take_pictures)
+        self.__button_take_pictures.config(state="enabled")
+
+
        # In __frame_text_actions
 
         self.__text_actions = tk.Text(self.__frame_text_actions,
@@ -612,6 +621,7 @@ class GameGui(ttk.Frame):
         self.__button_edit_actions.grid(row=0, column=3)
         self.__label_turn.grid(row=0, column=4)
         self.__spinbox_turn.grid(row=0, column=5)
+        self.__button_take_pictures.grid(row=0, column=6)
 
         self.__frame_human_actions.rowconfigure(0, pad=5)
         self.__frame_human_actions.columnconfigure(0, pad=5)
@@ -620,6 +630,7 @@ class GameGui(ttk.Frame):
         self.__frame_human_actions.columnconfigure(3, pad=5)
         self.__frame_human_actions.columnconfigure(4, pad=5)
         self.__frame_human_actions.columnconfigure(5, pad=5)
+        self.__frame_human_actions.columnconfigure(6, pad=10)
         
 
         self.__frame_text_actions.pack(side=tk.TOP)
@@ -710,6 +721,11 @@ class GameGui(ttk.Frame):
            self.__text_actions.config(state="disabled")
 
 
+    def __command_update_take_pictures(self):
+
+        self.__do_take_picture = self.__variable_take_pictures.get()
+
+
     def __command_start_stop(self):
 
         if self.__timer_id is not None:
@@ -746,6 +762,7 @@ class GameGui(ttk.Frame):
            self.__combobox_white_player.config(state="disabled")
            self.__combobox_black_player.config(state="disabled")
            self.__button_reserve.config(state="disabled")
+           self.__button_take_pictures.config(state="disabled")
 
            if self.__edit_actions:
                actions_text = self.__text_actions.get('1.0', tk.END)
@@ -853,6 +870,7 @@ class GameGui(ttk.Frame):
                    self.__combobox_white_player.config(state="readonly")
                    self.__combobox_black_player.config(state="readonly")
                    self.__button_reserve.config(state="enabled")
+                   self.__button_take_pictures.config(state="enabled")
 
                    self.__entry_action.config(state="disabled")
                    self.__button_action_confirm.config(state="disabled")
@@ -888,6 +906,7 @@ class GameGui(ttk.Frame):
            self.__combobox_white_player.config(state="readonly")
            self.__combobox_black_player.config(state="readonly")
            self.__button_reserve.config(state="enabled")
+           self.__button_take_pictures.config(state="enabled")
 
            self.__entry_action.config(state="enabled")
            self.__variable_action.set("")
@@ -942,7 +961,7 @@ class GameGui(ttk.Frame):
                 self.__game.next_turn()
                 self.__mikjersi_state = self.__game.get_state()
                 self.__draw_state()
-                self.__make_state_picture()
+                self.__take_picture()
 
                 self.__variable_summary.set(self.__game.get_summary())
                 self.__variable_log.set(self.__game.get_log())
@@ -968,6 +987,7 @@ class GameGui(ttk.Frame):
            self.__combobox_white_player.config(state="readonly")
            self.__combobox_black_player.config(state="readonly")
            self.__button_reserve.config(state="enabled")
+           self.__button_take_pictures.config(state="enabled")
 
            self.__progressbar['value'] = 0.
 
@@ -978,12 +998,12 @@ class GameGui(ttk.Frame):
            self.__edit_actions = False
            self.__variable_edit_actions.set(self.__edit_actions)
            
-           self.__make_animated_state_picture()
+           self.__make_animated_pictures()
 
 
 
-    def __make_state_picture(self):
-        if self.__do_make_state_picture:
+    def __take_picture(self):
+        if self.__do_take_picture:
 
             assert self.__game is not None
             turn = self.__game.get_turn()
@@ -994,14 +1014,14 @@ class GameGui(ttk.Frame):
                     shutil.rmtree(AppConfig.TMP_PICTURE_DIR)
                 os.mkdir(AppConfig.TMP_PICTURE_DIR)
                 
-                self.__state_picture_index = 0
+                self.__picture_index = 0
                 
                 
-            if turn >  self.__state_picture_index:
+            if turn >  self.__picture_index:
                 
-                state_export_path = os.path.join(AppConfig.TMP_PICTURE_DIR, "state-%3.3d" % turn)    
+                picture_export_path = os.path.join(AppConfig.TMP_PICTURE_DIR, "state-%3.3d" % turn)    
     
-                state_png_file = state_export_path + '.png'
+                picture_png_file = picture_export_path + '.png'
                 
                 grab_canvas_only = True
                 
@@ -1023,20 +1043,20 @@ class GameGui(ttk.Frame):
                     picture_bbox = None
          
                 image = ImageGrab.grab(bbox=picture_bbox)
-                image.save(state_png_file)
-                self.__state_picture_index = turn   
+                image.save(picture_png_file)
+                self.__picture_index = turn   
  
     
-    def __make_animated_state_picture(self):
-         if self.__do_make_state_picture:
+    def __make_animated_pictures(self):
+         if self.__do_take_picture:
              if os.path.isdir(AppConfig.TMP_PICTURE_DIR):
  
                 frames = []
-                image_list = glob.glob(os.path.join(AppConfig.TMP_PICTURE_DIR, "state-*"))
+                picture_list = glob.glob(os.path.join(AppConfig.TMP_PICTURE_DIR, "state-*"))
                 
-                if len(image_list) != 0:
-                    for image in image_list:
-                        new_frame = Image.open(image)
+                if len(picture_list) != 0:
+                    for picture in picture_list:
+                        new_frame = Image.open(picture)
                         frames.append(new_frame)
                      
                     # Save into a GIF file that loops forever

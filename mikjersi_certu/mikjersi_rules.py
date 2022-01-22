@@ -3400,7 +3400,7 @@ def main():
     if False:
         test_game_between_random_and_human_players()
 
-    if False:
+    if True:
         test_game_between_minimax_players()
 
     if True:
