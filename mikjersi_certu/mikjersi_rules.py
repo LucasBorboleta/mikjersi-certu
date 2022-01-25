@@ -2469,7 +2469,7 @@ class MinimaxSearcher():
                  '__distance_weight', '__capture_weight', 
                  '__fighter_weight', '__reserve_weight',
                  '__center_weight', '__credit_weight',
-                 '__debug')
+                 '__debug', '__state_value_count', '__child_count')
 
 
     default_weights_by_depth = dict()
@@ -2557,10 +2557,16 @@ class MinimaxSearcher():
         do_check = False
         
         initial_state = MinimaxState(state, state.get_current_player())
+        
+        self.__state_value_count = 0
+        self.__child_count = 0
 
         (best_value, action_values) = self.alphabeta(state=initial_state,
                                                     player=1,
                                                     return_action_values=True)
+        
+        print()
+        print("__state_value_count:", self.__state_value_count, "__child_count", self.__child_count) 
  
         if do_check:       
              self.check(initial_state, best_value, action_values)
@@ -2639,6 +2645,8 @@ class MinimaxSearcher():
         # evaluate favorability for mikjersi_maximizer_player
 
         assert depth >= 0
+        
+        self.__state_value_count += 1
 
         # evaluate as if mikjersi_maximizer_player == Player.WHITE and use minimax_maximizer_sign
         mikjersi_maximizer_player = state.get_current_maximizer_player()
@@ -2922,6 +2930,7 @@ class MinimaxSearcher():
             
             for action in actions:
                 child_state = state.take_action(action)
+                self.__child_count += 1
                 
                 child_value = self.alphabeta(state=child_state, player=-player, depth=depth - 1,
                                               alpha=alpha, beta=beta)
@@ -2944,6 +2953,7 @@ class MinimaxSearcher():
             
             for (action_index, action) in enumerate(actions):
                 child_state = state.take_action(action)
+                self.__child_count += 1
                 
                 child_value = self.alphabeta(state=child_state, player=-player, depth=depth - 1,
                                               alpha=alpha, beta=beta)
@@ -3028,7 +3038,7 @@ class MinimaxSearcher():
         if use_sort:
             self.sort_actions(actions)
             
-        pvs_window = 1
+        pvs_window = 1.2
         
         if player == 1:
             
@@ -3036,20 +3046,26 @@ class MinimaxSearcher():
             
             for (action_index, action) in enumerate(actions):
                 child_state = state.take_action(action)
+                self.__child_count += 1
+
                 
                 if action_index == 0:
                     child_value = self.pvs(state=child_state, player=-player, depth=depth - 1,
                                               alpha=alpha, beta=beta)
                     
                 else:
-                    print("--- maximizer: null window ...")
+
+                    if self.__debug:
+                        print("--- maximizer: null window ...")
                     child_value = self.pvs(state=child_state, player=-player, depth=depth - 1,
-                                              alpha=alpha - pvs_window, beta=alpha + pvs_window)
+                                              alpha=alpha, beta=alpha + pvs_window)
                     
-                    if (alpha < child_value < beta):
-                        print("--- maximizer: null window succeeded")
+                    if not (alpha < child_value < beta):
+                        if self.__debug:
+                            print("--- maximizer: null window succeeded")
                     else:
-                        print("--- maximizer: null window failed; full re-search")
+                        if self.__debug:
+                            print("--- maximizer: null window failed; full re-search")
                         child_value = self.pvs(state=child_state, player=-player, depth=depth - 1,
                                               alpha=alpha, beta=beta)
                            
@@ -3071,20 +3087,24 @@ class MinimaxSearcher():
             
             for (action_index, action) in enumerate(actions):
                 child_state = state.take_action(action)
+                self.__child_count += 1
                 
                 if action_index == 0:
                     child_value = self.pvs(state=child_state, player=-player, depth=depth - 1,
                                               alpha=alpha, beta=beta)
                     
                 else:
-                    print("--- minimizer: null window ...")
+                    if self.__debug:
+                        print("--- minimizer: null window ...")
                     child_value = self.pvs(state=child_state, player=-player, depth=depth - 1,
-                                              alpha=beta - pvs_window, beta=beta + pvs_window)
+                                              alpha=beta - pvs_window, beta=beta)
                     
-                    if (alpha < child_value < beta):
-                        print("--- minimizer: null window succeeded")
+                    if not (alpha < child_value < beta):
+                        if self.__debug:
+                            print("--- minimizer: null window succeeded")
                     else:
-                        print("--- minimizer: null window failed; full re-search")
+                        if self.__debug:
+                            print("--- minimizer: null window failed; full re-search")
                         child_value = self.pvs(state=child_state, player=-player, depth=depth - 1,
                                               alpha=alpha, beta=beta)
 
