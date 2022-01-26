@@ -2469,7 +2469,7 @@ class MinimaxSearcher():
                  '__distance_weight', '__capture_weight', 
                  '__fighter_weight', '__reserve_weight',
                  '__center_weight', '__credit_weight',
-                 '__debug', '__state_value_count', '__child_count')
+                 '__debug')
 
 
     default_weights_by_depth = dict()
@@ -2557,20 +2557,14 @@ class MinimaxSearcher():
         do_check = False
         
         initial_state = MinimaxState(state, state.get_current_player())
-        
-        self.__state_value_count = 0
-        self.__child_count = 0
 
         (best_value, action_values) = self.alphabeta(state=initial_state,
                                                     player=1,
                                                     return_action_values=True)
         
-        print()
-        print("__state_value_count:", self.__state_value_count, "__child_count", self.__child_count) 
- 
-        if do_check:       
-             self.check(initial_state, best_value, action_values)
-            
+        if do_check:                 
+            self.check(initial_state, best_value, action_values)
+
         if self.__debug:
             print()
             
@@ -2646,8 +2640,6 @@ class MinimaxSearcher():
 
         assert depth >= 0
         
-        self.__state_value_count += 1
-
         # evaluate as if mikjersi_maximizer_player == Player.WHITE and use minimax_maximizer_sign
         mikjersi_maximizer_player = state.get_current_maximizer_player()
         
@@ -2809,6 +2801,7 @@ class MinimaxSearcher():
         
         if self.__debug:
             print("--- sort actions")           
+
         actions.sort(key=score_action, reverse=True)
 
 
@@ -2840,7 +2833,7 @@ class MinimaxSearcher():
         if return_action_values:
             action_values = dict()
 
-        actions = state.get_actions(shuffle=False)
+        actions = state.get_actions(shuffle=True)
         
         if player == 1:
             
@@ -2930,7 +2923,6 @@ class MinimaxSearcher():
             
             for action in actions:
                 child_state = state.take_action(action)
-                self.__child_count += 1
                 
                 child_value = self.alphabeta(state=child_state, player=-player, depth=depth - 1,
                                               alpha=alpha, beta=beta)
@@ -2953,7 +2945,6 @@ class MinimaxSearcher():
             
             for (action_index, action) in enumerate(actions):
                 child_state = state.take_action(action)
-                self.__child_count += 1
                 
                 child_value = self.alphabeta(state=child_state, player=-player, depth=depth - 1,
                                               alpha=alpha, beta=beta)
@@ -2991,7 +2982,7 @@ class MinimaxSearcher():
 
         assert False
         # >> Method "pvs" to be used only when the null windows principle will be understood 
-        # >> and checked against minimax !        
+        # >> checked against minimax, and proven faster than alphabeta !        
 
         use_sort = True
 
@@ -3032,13 +3023,13 @@ class MinimaxSearcher():
             action_values = dict()
 
         # >> pvs will return only the first high valued action,
-        # >> so shuffling may vary the alphabeta return
+        # >> so shuffling may vary the pvs return
         actions = state.get_actions(shuffle=True)
         actions = self.reduce_actions(actions)
         if use_sort:
             self.sort_actions(actions)
             
-        pvs_window = 1.2
+        pvs_window = 0.01
         
         if player == 1:
             
@@ -3046,8 +3037,6 @@ class MinimaxSearcher():
             
             for (action_index, action) in enumerate(actions):
                 child_state = state.take_action(action)
-                self.__child_count += 1
-
                 
                 if action_index == 0:
                     child_value = self.pvs(state=child_state, player=-player, depth=depth - 1,
@@ -3067,7 +3056,7 @@ class MinimaxSearcher():
                         if self.__debug:
                             print("--- maximizer: null window failed; full re-search")
                         child_value = self.pvs(state=child_state, player=-player, depth=depth - 1,
-                                              alpha=alpha, beta=beta)
+                                              alpha=child_value - 1/OMEGA, beta=beta)
                            
                 if return_action_values:
                     action_values[action] = child_value
@@ -3087,7 +3076,6 @@ class MinimaxSearcher():
             
             for (action_index, action) in enumerate(actions):
                 child_state = state.take_action(action)
-                self.__child_count += 1
                 
                 if action_index == 0:
                     child_value = self.pvs(state=child_state, player=-player, depth=depth - 1,
@@ -3106,7 +3094,7 @@ class MinimaxSearcher():
                         if self.__debug:
                             print("--- minimizer: null window failed; full re-search")
                         child_value = self.pvs(state=child_state, player=-player, depth=depth - 1,
-                                              alpha=alpha, beta=beta)
+                                              alpha=alpha, beta=child_value + 1/OMEGA)
 
     
                 state_value = min(state_value, child_value)    
@@ -3156,7 +3144,7 @@ class MinimaxSearcher():
         if return_action_values:
             action_values = dict()
 
-        actions = state.get_actions(shuffle=False)
+        actions = state.get_actions(shuffle=True)
 
         if self.__debug:
             print()
@@ -3528,7 +3516,7 @@ def test_game_between_minimax_players():
                 x_player = Player.WHITE
                 y_player = Player.BLACK
 
-                game.start(play_reserve=False)
+                game.start(play_reserve=True)
                 while game.has_next_turn():
                     print("--> " + x_searcher.get_name() + " versus " +
                                    y_searcher.get_name() +  " game_index: %d" % game_index)
