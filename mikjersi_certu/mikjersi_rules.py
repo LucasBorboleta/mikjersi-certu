@@ -33,7 +33,6 @@ import mcts
 
 _do_debug = False
 
-
 OMEGA = 1_000.
 OMEGA_2 = OMEGA**2
 
@@ -2719,7 +2718,7 @@ class MinimaxSearcher():
             capture_norm = 5
             fighter_norm = 4
             reserve_norm = 6
-            center_norm = 9
+            center_norm = 4
             credit_norm = JersiState.get_max_credit()
             
             assert distance_difference <= distance_norm
