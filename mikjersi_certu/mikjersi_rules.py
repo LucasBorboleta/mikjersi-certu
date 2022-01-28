@@ -2634,7 +2634,7 @@ class MinimaxSearcher():
         assert len(best_names - best_names_ref) == 0
     
 
-    def state_value(self, state, depth):
+    def evaluate_state_value(self, state, depth):
         # evaluate favorability for mikjersi_maximizer_player
 
         assert depth >= 0
@@ -2758,6 +2758,8 @@ class MinimaxSearcher():
 
     def reduce_actions(self, actions):
 
+        assert len(actions) != 0
+
         if (self.__max_children is not None and len(actions) > self.__max_children):
             if self.__debug:
                 print("--- reduce actions")           
@@ -2772,7 +2774,8 @@ class MinimaxSearcher():
 
                 selected_move_actions = list()
                 for action_chunk in chunks(move_actions, self.__max_children):
-                    selected_move_actions.append(random.choice(action_chunk))
+                    if len(action_chunk) != 0:
+                        selected_move_actions.append(random.choice(action_chunk))
 
                 move_actions = selected_move_actions
 
@@ -2789,6 +2792,7 @@ class MinimaxSearcher():
             else:
                 actions = move_actions
 
+        assert len(actions) != 0
         return actions
 
 
@@ -2811,7 +2815,7 @@ class MinimaxSearcher():
 
 
         if depth == 0 or state.is_terminal():
-            state_value = self.state_value(state, depth)
+            state_value = self.evaluate_state_value(state, depth)
             
             if self.__debug:
                 print()
@@ -2885,7 +2889,7 @@ class MinimaxSearcher():
         assert alpha <= beta
 
         if depth == 0 or state.is_terminal():
-            state_value = self.state_value(state, depth)
+            state_value = self.evaluate_state_value(state, depth)
             
             if self.__debug:
                 print()
@@ -2997,7 +3001,7 @@ class MinimaxSearcher():
         assert alpha <= beta
 
         if depth == 0 or state.is_terminal():
-            state_value = self.state_value(state, depth)
+            state_value = self.evaluate_state_value(state, depth)
             
             if self.__debug:
                 print()
@@ -3131,7 +3135,7 @@ class MinimaxSearcher():
             depth =self.__max_depth
 
         if depth == 0 or state.is_terminal():
-            state_value = player*self.state_value(state, depth)
+            state_value = player*self.evaluate_state_value(state, depth)
             
             if self.__debug:
                 print()
