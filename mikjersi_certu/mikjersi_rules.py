@@ -2787,7 +2787,7 @@ class MinimaxSearcher():
                 drop_probability = 0.25
                 drop_count = max(drop_count, int(math.ceil(drop_probability*len(move_actions))))
 
-                drop_actions = random.choices(drop_actions, k=drop_count)
+                drop_actions = random.sample(drop_actions, k=drop_count)
                 actions = move_actions + drop_actions
             else:
                 actions = move_actions
@@ -2931,6 +2931,7 @@ class MinimaxSearcher():
                                               alpha=alpha, beta=beta)
     
                 if return_action_values:
+                    assert action not in action_values
                     action_values[action] = child_value
                     
                 state_value = max(state_value, child_value)    
