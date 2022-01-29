@@ -3,7 +3,7 @@
 
 """mikjersi_rules.py implements the rules engine for the MIKJERSI boardgame."""
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 _COPYRIGHT_AND_LICENSE = """
 MIKJERSI-CERTU implements a GUI and a rules engine for the MIKJERSI boardgame.

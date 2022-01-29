@@ -1032,7 +1032,7 @@ class GameGui(ttk.Frame):
             picture_png_file = picture_export_path + '.png'
             
             
-            grab_canvas_only = False
+            grab_canvas_only = True
             
             if grab_canvas_only:
             
