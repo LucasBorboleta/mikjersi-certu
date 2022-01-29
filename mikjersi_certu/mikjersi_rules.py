@@ -3318,7 +3318,6 @@ class Game:
 
 
     def get_turn(self):
-        assert self.__turn is not None
         return self.__turn
 
 

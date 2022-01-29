@@ -372,15 +372,17 @@ class GameGui(ttk.Frame):
         self.__cube_faces_options = ("faces=letters", "faces=drawings", "faces=pictures")
         self.__cube_faces = self.__cube_faces_options[2]
 
-        self.__timer_delay = 500
-        self.__timer_id = None
-
         self.__play_reserve = True
         self.__edit_actions = False
         self.__turn_states = list()
-        
+ 
+        self.__game_timer_id = None
+        self.__game_timer_delay = 500
+       
         self.__do_take_picture = False
-        self.__picture_index = 0   
+        self.__picture_timer_id = None   
+        self.__picture_timer_delay = 100
+        assert self.__picture_timer_delay < self.__game_timer_delay
 
         self.__game = None
         self.__game_started = False
@@ -728,9 +730,9 @@ class GameGui(ttk.Frame):
 
     def __command_start_stop(self):
 
-        if self.__timer_id is not None:
-            self.__canvas.after_cancel(self.__timer_id)
-            self.__timer_id = None
+        if self.__game_timer_id is not None:
+            self.__canvas.after_cancel(self.__game_timer_id)
+            self.__game_timer_id = None
 
         self.__entry_action.config(state="disabled")
         self.__button_action_confirm.config(state="disabled")
@@ -889,7 +891,8 @@ class GameGui(ttk.Frame):
                    self.__edit_actions = False
                    self.__variable_edit_actions.set(self.__edit_actions)
 
-                   self.__timer_id = self.__canvas.after(self.__timer_delay, self.__command_next_turn)
+                   self.__picture_timer_id = self.__canvas.after(self.__picture_timer_delay, self.__take_picture)
+                   self.__game_timer_id = self.__canvas.after(self.__game_timer_delay, self.__command_next_turn)
 
            else:
                self.__text_actions.config(state="normal")
@@ -900,7 +903,8 @@ class GameGui(ttk.Frame):
                self.__edit_actions = False
                self.__variable_edit_actions.set(self.__edit_actions)
 
-               self.__timer_id = self.__canvas.after(self.__timer_delay, self.__command_next_turn)
+               self.__picture_timer_id = self.__canvas.after(self.__picture_timer_delay, self.__take_picture)
+               self.__game_timer_id = self.__canvas.after(self.__game_timer_delay, self.__command_next_turn)
 
         else:
            self.__combobox_white_player.config(state="readonly")
@@ -924,9 +928,9 @@ class GameGui(ttk.Frame):
 
     def __command_next_turn(self):
 
-        if self.__timer_id is not None:
-            self.__canvas.after_cancel(self.__timer_id)
-            self.__timer_id = None
+        if self.__game_timer_id is not None:
+            self.__canvas.after_cancel(self.__game_timer_id)
+            self.__game_timer_id = None
 
         if self.__game_started and self.__game.has_next_turn():
 
@@ -961,7 +965,6 @@ class GameGui(ttk.Frame):
                 self.__game.next_turn()
                 self.__mikjersi_state = self.__game.get_state()
                 self.__draw_state()
-                self.__take_picture()
 
                 self.__variable_summary.set(self.__game.get_summary())
                 self.__variable_log.set(self.__game.get_log())
@@ -981,7 +984,8 @@ class GameGui(ttk.Frame):
                 self.__spinbox_turn.config(values=list(range(len(self.__turn_states))))
                 self.__variable_turn.set(len(self.__turn_states) - 1)
 
-            self.__timer_id = self.__canvas.after(self.__timer_delay, self.__command_next_turn)
+            self.__picture_timer_id = self.__canvas.after(self.__picture_timer_delay, self.__take_picture)
+            self.__game_timer_id = self.__canvas.after(self.__game_timer_delay, self.__command_next_turn)
 
         else:
            self.__combobox_white_player.config(state="readonly")
@@ -1003,48 +1007,52 @@ class GameGui(ttk.Frame):
 
 
     def __take_picture(self):
+            
+        if self.__picture_timer_id is not None:
+            self.__canvas.after_cancel(self.__picture_timer_id)
+            self.__picture_timer_id = None
+        
         if self.__do_take_picture:
 
             assert self.__game is not None
             turn = self.__game.get_turn()
-            assert turn >= 1
             
-            if turn == 1:
+            if turn is None:
                 if os.path.isdir(AppConfig.TMP_PICTURE_DIR):
                     shutil.rmtree(AppConfig.TMP_PICTURE_DIR)
                 os.mkdir(AppConfig.TMP_PICTURE_DIR)
                 
-                self.__picture_index = 0
+                picture_index = 0
+            
+            else:
+                picture_index = turn                              
+                                
+            picture_export_path = os.path.join(AppConfig.TMP_PICTURE_DIR, "state-%3.3d" % picture_index)    
+
+            picture_png_file = picture_export_path + '.png'
+            
+            
+            grab_canvas_only = False
+            
+            if grab_canvas_only:
+            
+                x = self.__canvas.winfo_rootx()
+                y = self.__canvas.winfo_rooty()
+                w = self.__canvas.winfo_width()
+                h = self.__canvas.winfo_height()
                 
+                left = x
+                right = x + w
+                upper = y
+                lower = y + h
+                                
+                picture_bbox = (left, upper, right, lower)
                 
-            if turn >  self.__picture_index:
-                
-                picture_export_path = os.path.join(AppConfig.TMP_PICTURE_DIR, "state-%3.3d" % turn)    
-    
-                picture_png_file = picture_export_path + '.png'
-                
-                grab_canvas_only = True
-                
-                if grab_canvas_only:
-                
-                    x = self.__canvas.winfo_rootx()
-                    y = self.__canvas.winfo_rooty()
-                    w = self.__canvas.winfo_width()
-                    h = self.__canvas.winfo_height()
-                    
-                    left = x
-                    right = x + w
-                    upper = y
-                    lower = y + h
-                                    
-                    picture_bbox = (left, upper, right, lower)
-                    
-                else:
-                    picture_bbox = None
-         
-                image = ImageGrab.grab(bbox=picture_bbox)
-                image.save(picture_png_file)
-                self.__picture_index = turn   
+            else:
+                picture_bbox = None
+     
+            image = ImageGrab.grab(bbox=picture_bbox)
+            image.save(picture_png_file)
  
     
     def __make_animated_pictures(self):
