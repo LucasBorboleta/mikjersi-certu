@@ -1,5 +1,5 @@
 # COPYRIGHT
-MIKJERSI-CERTU (the program) implements a micro-variant of JERSI (the rules), a strategy board game.
+MIKJERSI-CERTU implements a GUI and a rules engine for the MIKJERSI boardgame.
 
 Copyright (C) 2021 Lucas Borboleta (lucas.borboleta@free.fr).
 

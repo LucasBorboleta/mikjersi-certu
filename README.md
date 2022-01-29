@@ -2,7 +2,7 @@
 
 The Python package *mikjersi_certu* provides a GUI and a rules engine for playing the *Mikjersi* board-game, which is a micro-variant of [*Jersi*](https://github.com/LucasBorboleta/jersi) board-game. 
 
-<img src="./docs/gui-game-play-minimax-1-vs-idem.gif" style="zoom:75%;" />
+<img src="./docs/gui-game-play-minimax-2-vs-minimax-1.gif" style="zoom:75%;" />
 
 The rules of Mikjersi are those of Jersi, but with the following changes (https://github.com/LucasBorboleta/mikjersi):
 
