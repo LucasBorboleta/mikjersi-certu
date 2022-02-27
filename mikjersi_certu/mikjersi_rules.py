@@ -162,7 +162,7 @@ class TerminalCase(enum.Enum):
     WHITE_CAPTURED = enum.auto()
     WHITE_BLOCKED = enum.auto()
 
-    ZERO_CREDIT = enum.auto()
+    ZERO_TURN_CREDIT = enum.auto()
 
 
 class Cube:
@@ -286,7 +286,7 @@ class Cube:
 
     @staticmethod
     def __create_all_sorted_cubes():
-        for name in sorted(Cube.__name_to_cube.keys()):
+        for name in reversed(sorted(Cube.__name_to_cube.keys())):
             Cube.__all_sorted_cubes.append(Cube.__name_to_cube[name])
 
         for (index, cube) in enumerate(Cube.__all_sorted_cubes):
@@ -458,7 +458,7 @@ class Cell:
 
     @staticmethod
     def __create_all_sorted_cells():
-        for name in sorted(Cell.__name_to_cell.keys()):
+        for name in reversed(sorted(Cell.__name_to_cell.keys())):
             Cell.__all_sorted_cells.append(Cell.__name_to_cell[name])
 
         for (index, cell) in enumerate(Cell.__all_sorted_cells):
@@ -639,7 +639,7 @@ class Notation:
 
 
     @staticmethod
-    def move_cube(src_cell_name, dst_cell_name, capture, previous_action=None):
+    def move_cube(src_cell_name, dst_cell_name, capture, exchange, previous_action):
         if previous_action is None:
             notation = src_cell_name + "-" + dst_cell_name
         else:
@@ -656,12 +656,15 @@ class Notation:
 
         else:
             assert False
+            
+        if exchange:
+            notation += "*"
 
         return notation
 
 
     @staticmethod
-    def move_stack(src_cell_name, dst_cell_name, capture, previous_action=None):
+    def move_stack(src_cell_name, dst_cell_name, capture, exchange, previous_action):
         if previous_action is None:
             notation = src_cell_name + "=" + dst_cell_name
         else:
@@ -678,6 +681,9 @@ class Notation:
 
         else:
             assert False
+            
+        if exchange:
+            notation += "*"
 
         return notation
 
@@ -836,18 +842,20 @@ class Notation:
 
 class JersiAction:
 
-    __slots__ = ('notation', 'state', 'king_captures', 'some_captures')
+    __slots__ = ('notation', 'state', 'king_captures', 'some_captures', 'exchange')
 
 
-    def __init__(self, notation, state, capture=Capture.NONE, previous_action=None):
+    def __init__(self, notation, state, capture, exchange, previous_action):
         self.notation = notation
         self.state = state
         self.king_captures = set()
         self.some_captures = set()
+        self.exchange = exchange
 
         if previous_action is not None:
             self.king_captures.update(previous_action.king_captures)
             self.some_captures.update(previous_action.some_captures)
+            self.exchange = self.exchange or previous_action.exchange
 
         if capture in (Capture.KING_CUBE, Capture.KING_STACK):
             self.king_captures.add(capture)
@@ -906,27 +914,67 @@ class JersiActionAppender:
 
 class JersiState:
 
-    __max_credit = 40
+    __max_turn_credit = 20
+    __max_exchange_credit = 2
     __king_end_distances = None
     __center_cell_indices = None
     __reserve_cell_by_cube = None
     __prison_cell_by_cube = None
 
     __slots__ = ('__play_reserve', '__cube_status', '__cell_bottom', '__cell_top',
-                 '__credit', '__player', '__turn',
+                 '__turn_credit', '__exchange_credit', '__player', '__turn',
                  '__actions', '__actions_by_simple_names', '__actions_by_names',
                  '__taken', '__terminal_case', '__terminated', '__rewards')
 
 
+    def audit(self, at, new_prisonner_index=None):
+
+        print()
+        print("--- audit --- at %s for state %s ..." % (at, id(self)))
+                
+        if new_prisonner_index is not None:
+            assert self.__cube_status[new_prisonner_index] == CubeStatus.CAPTURED
+        
+        for (cube_index, cube_status) in enumerate(self.__cube_status):
+            assert ( cube_status == CubeStatus.ACTIVATED or
+                     cube_status == CubeStatus.CAPTURED or
+                     cube_status == CubeStatus.RESERVED )
+            
+            cell_found_once = False
+            
+            for (cell_index, cell) in enumerate(Cell.all):
+                
+                if self.__cell_bottom[cell_index] == cube_index:
+                    assert not cell_found_once
+                    cell_found_once = True
+                    
+                if self.__cell_top[cell_index] == cube_index:
+                    assert not cell_found_once
+                    cell_found_once = True
+                    
+            if new_prisonner_index is not None and cube_index == new_prisonner_index:
+                assert not cell_found_once                    
+            else:
+                assert cell_found_once
+                     
+        print("--- audit --- at %s for state %s done" % (at, id(self)))
+        
+
     def __init__(self, play_reserve=True):
         
         self.__play_reserve = play_reserve
-
+           
         self.__cube_status = None
         self.__cell_bottom = None
         self.__cell_top = None
 
-        self.__credit = JersiState.__max_credit
+        self.__turn_credit = JersiState.__max_turn_credit
+                
+        if self.__play_reserve:
+            self.__exchange_credit = JersiState.__max_exchange_credit
+        else:
+            self.__exchange_credit = 0
+            
         self.__player = Player.WHITE
         self.__turn = 1
 
@@ -944,7 +992,7 @@ class JersiState:
         self.__init_center_cell_indices()
         self.__init_reserve_cell_by_cube()
         self.__init_prison_cell_by_cube()
-
+        
 
     def __fork(self):
         
@@ -1148,7 +1196,7 @@ class JersiState:
                     self.__cell_top[cell_index] = cube_index  
             
             else:
-                assert cell.player is None
+                assert False
 
         else:
 
@@ -1176,18 +1224,28 @@ class JersiState:
 
 
     def __manage_new_prisoner(self, cube_index):
+        self.audit("__manage_new_prisoner.enter", new_prisonner_index=cube_index)
+
         assert self.__cube_status[cube_index] == CubeStatus.CAPTURED
 
+        has_exchanged = False
+        
         opposite_index = Cube.get_opposite_index(cube_index)
         
-        if not self.__play_reserve or self.__cube_status[opposite_index] != CubeStatus.CAPTURED:
+        if not self.__play_reserve:
+            self.__set_cube_at_prison(cube_index)
+        
+        elif self.__exchange_credit == 0:
+            self.__set_cube_at_prison(cube_index)
+    
+        elif self.__cube_status[opposite_index] != CubeStatus.CAPTURED:
             self.__set_cube_at_prison(cube_index)
             
         else:
             # exchange the prisoners that return to their reserves
             
-            opposite_cell_index = JersiState.__prison_cell_by_cube[opposite_index]
-            
+            opposite_cell_index = JersiState.__prison_cell_by_cube[opposite_index]           
+
             if self.__cell_top[opposite_cell_index] == opposite_index:
                 self.__cell_top[opposite_cell_index] = Null.CUBE
                 
@@ -1195,6 +1253,12 @@ class JersiState:
                 self.__cell_bottom[opposite_cell_index] = Null.CUBE
                 
             else:
+                
+                captured_cube = Cube.all[cube_index]
+                exchanged_cube = Cube.all[opposite_index]
+                print("captured_cube:", captured_cube)
+                print("exchanged_cube:", exchanged_cube)              
+                
                 assert False
 
             self.__cube_status[cube_index] = CubeStatus.RESERVED            
@@ -1202,6 +1266,12 @@ class JersiState:
 
             self.__cube_status[opposite_index] = CubeStatus.RESERVED            
             self.__set_cube_at_reserve(opposite_index)
+            
+            has_exchanged = True
+
+        self.audit("__manage_new_prisoner.exit")
+        return has_exchanged
+
 
 
     def show(self):
@@ -1321,26 +1391,38 @@ class JersiState:
                 captured_labels[cube.label] += 1
 
         summary = (
-            f"turn {self.__turn} / player {Player.name(self.__player)} / credit {self.__credit} / " +
+            f"turn {self.__turn} / player {Player.name(self.__player)} / " + 
+            f"credits {self.__turn_credit}.{self.__exchange_credit} / " +
              "reserved %s" % " ".join([f"{label}:{count}" for (label, count) in sorted(reserved_labels.items())]) + " / " +
              "captured %s" % " ".join([f"{label}:{count}" for (label, count) in sorted(captured_labels.items())]))
 
         return summary
 
 
-    def get_credit(self):
-        return self.__credit
+    def get_turn_credit(self):
+        return self.__turn_credit
 
 
     @staticmethod
-    def get_max_credit():
-        return JersiState.__max_credit
+    def get_max_turn_credit():
+        return JersiState.__max_turn_credit
 
 
     @staticmethod
-    def set_max_credit(max_credit):
-        assert max_credit > 0
-        JersiState.__max_credit = max_credit
+    def get_max_exchange_credit():
+        return JersiState.__max_exchange_credit
+
+
+    @staticmethod
+    def set_max_turn_credit(max_turn_credit):
+        assert max_turn_credit > 0
+        JersiState.__max_turn_credit = max_turn_credit
+
+
+    @staticmethod
+    def set_max_exchange_credit(max_exchange_credit):
+        assert max_exchange_credit >= 0
+        JersiState.__max_exchange_credit = max_exchange_credit
 
 
     def get_current_player(self):
@@ -1388,13 +1470,16 @@ class JersiState:
             state.__taken = True
             state.__player = state.get_other_player()
             state.__turn += 1
-            state.__credit = max(0, state.__credit - 1)
+            state.__turn_credit = max(0, state.__turn_credit - 1)
+            
+            if action.exchange:
+                state.__exchange_credit = max(0, state.__exchange_credit - 1)
 
             if len(action.some_captures) != 0:
-                state.__credit = JersiState.__max_credit
+                state.__turn_credit = JersiState.__max_turn_credit
 
             elif len(action.king_captures) != 0 and action.king_captures != set([Capture.KING_CUBE]):
-                state.__credit = JersiState.__max_credit
+                state.__turn_credit = JersiState.__max_turn_credit
 
         return state
 
@@ -1475,10 +1560,10 @@ class JersiState:
                 self.__rewards[Player.BLACK] = Reward.WIN
                 self.__rewards[Player.WHITE] = Reward.LOSS
 
-            elif self.__credit == 0:
-                # credit is exhausted ==> nobody wins
+            elif self.__turn_credit == 0:
+                # turn_credit is exhausted ==> nobody wins
                 self.__terminated = True
-                self.__terminal_case = TerminalCase.ZERO_CREDIT
+                self.__terminal_case = TerminalCase.ZERO_TURN_CREDIT
                 self.__rewards = [Reward.DRAW for _ in Player]
 
             elif not self.has_action():
@@ -1806,7 +1891,11 @@ class JersiState:
 
             state.__cell_bottom[dst_cell_index] = src_cube_index
             state.__cube_status[src_cube_index] = CubeStatus.ACTIVATED
-            action = JersiAction(notation, state)
+            
+            action = JersiAction(notation, state, 
+                                 capture=Capture.NONE, 
+                                 exchange=False, 
+                                 previous_action=None)
 
         elif self.__cell_top[dst_cell_index] == Null.CUBE:
             # destination cell has one cube
@@ -1837,7 +1926,11 @@ class JersiState:
 
                 state.__cell_top[dst_cell_index] = src_cube_index
                 state.__cube_status[src_cube_index] = CubeStatus.ACTIVATED
-                action = JersiAction(notation, state)
+                
+                action = JersiAction(notation, state,
+                                 capture=Capture.NONE, 
+                                 exchange=False, 
+                                 previous_action=None)
 
         else:
             # destination cell has two cubes
@@ -1874,8 +1967,13 @@ class JersiState:
             state = self.__fork()
             state.__cell_bottom[dst_cell_index] = king_index
             state.__cube_status[king_index] = CubeStatus.ACTIVATED
+ 
             notation = Notation.relocate_king(king_label, dst_cell_name, previous_action=previous_action)
-            action = JersiAction(notation, state, capture=Capture.KING_CUBE, previous_action=previous_action)
+
+            action = JersiAction(notation, state, 
+                                 capture=Capture.KING_CUBE, 
+                                 exchange=False,
+                                 previous_action=previous_action)
 
         else:
             # cell has one cube
@@ -1888,8 +1986,13 @@ class JersiState:
                 state = self.__fork()
                 state.__cell_top[dst_cell_index] = king_index
                 state.__cube_status[king_index] = CubeStatus.ACTIVATED
+
                 notation = Notation.relocate_king(king_label, dst_cell_name, previous_action=previous_action)
-                action = JersiAction(notation, state, capture=Capture.KING_CUBE, previous_action=previous_action)
+
+                action = JersiAction(notation, state, 
+                                     capture=Capture.KING_CUBE,
+                                     exchange=False,
+                                     previous_action=previous_action)
 
             else:
                 action = None
@@ -1921,8 +2024,15 @@ class JersiState:
                 state.__cell_bottom[src_cell_index] = Null.CUBE
             state.__cell_bottom[dst_cell_index] = src_cube_index
 
-            notation = Notation.move_cube(src_cell_name, dst_cell_name, capture=Capture.NONE, previous_action=previous_action)
-            action = JersiAction(notation, state, previous_action=previous_action)
+            notation = Notation.move_cube(src_cell_name, dst_cell_name, 
+                                          capture=Capture.NONE, 
+                                          exchange=False, 
+                                          previous_action=previous_action)
+
+            action = JersiAction(notation, state,
+                                 capture=Capture.NONE,
+                                 exchange=False,
+                                 previous_action=previous_action)
 
         elif self.__cell_top[dst_cell_index] == Null.CUBE:
             # destination cell has one cube
@@ -1945,15 +2055,23 @@ class JersiState:
                     state.__cell_bottom[src_cell_index] = Null.CUBE
                 state.__cell_top[dst_cell_index] = src_cube_index
 
-                notation = Notation.move_cube(src_cell_name, dst_cell_name, capture=Capture.NONE, previous_action=previous_action)
-                action = JersiAction(notation, state, previous_action=previous_action)
+                notation = Notation.move_cube(src_cell_name, dst_cell_name, 
+                                              capture=Capture.NONE, 
+                                              exchange=False, 
+                                              previous_action=previous_action)
+
+                action = JersiAction(notation, state,
+                                     capture=Capture.NONE,
+                                     exchange=False,
+                                     previous_action=previous_action)
 
             elif dst_bottom.player != self.__player:
 
                 if src_cube.beats(dst_bottom):
                     # Capture the bottom cube
-
+                    
                     state = self.__fork()
+                    has_exchanged = False
 
                     state.__cell_bottom[dst_cell_index] = Null.CUBE
                     state.__cube_status[dst_bottom_index] = CubeStatus.CAPTURED
@@ -1970,10 +2088,17 @@ class JersiState:
                     state.__cell_bottom[dst_cell_index] = src_cube_index
                     
                     if capture == Capture.SOME_CUBE:
-                        state.__manage_new_prisoner(dst_bottom_index)
+                        has_exchanged = state.__manage_new_prisoner(dst_bottom_index)
 
-                    notation = Notation.move_cube(src_cell_name, dst_cell_name, capture=capture, previous_action=previous_action)
-                    action = JersiAction(notation, state, capture=capture, previous_action=previous_action)
+                    notation = Notation.move_cube(src_cell_name, dst_cell_name, 
+                                                  capture=capture, 
+                                                  exchange=has_exchanged, 
+                                                  previous_action=previous_action)
+
+                    action = JersiAction(notation, state, 
+                                         capture=capture, 
+                                         exchange=has_exchanged, 
+                                         previous_action=previous_action)
                 else:
                     action = None
 
@@ -1989,8 +2114,15 @@ class JersiState:
                     state.__cell_bottom[src_cell_index] = Null.CUBE
                 state.__cell_top[dst_cell_index] = src_cube_index
 
-                notation = Notation.move_cube(src_cell_name, dst_cell_name, capture=Capture.NONE, previous_action=previous_action)
-                action = JersiAction(notation, state, previous_action=previous_action)
+                notation = Notation.move_cube(src_cell_name, dst_cell_name, 
+                                              capture=Capture.NONE, 
+                                              exchange=False, 
+                                              previous_action=previous_action)
+
+                action = JersiAction(notation, state,
+                                     capture=Capture.NONE,
+                                     exchange=False,
+                                     previous_action=previous_action)
 
         else:
             # destination cell has two cubes
@@ -2012,6 +2144,7 @@ class JersiState:
             elif src_cube.beats(dst_top) and dst_bottom.sort == CubeSort.MOUNTAIN:
                 # Capture the top of the stack
                 state = self.__fork()
+                has_exchanged = False
 
                 state.__cell_top[dst_cell_index] = Null.CUBE
                 state.__cube_status[dst_top_index] = CubeStatus.CAPTURED
@@ -2028,14 +2161,22 @@ class JersiState:
                 state.__cell_top[dst_cell_index] = src_cube_index
                     
                 if capture == Capture.SOME_CUBE:
-                    state.__manage_new_prisoner(dst_top_index)
+                    has_exchanged = state.__manage_new_prisoner(dst_top_index)
 
-                notation = Notation.move_cube(src_cell_name, dst_cell_name, capture=capture, previous_action=previous_action)
-                action = JersiAction(notation, state, capture=capture, previous_action=previous_action)
+                notation = Notation.move_cube(src_cell_name, dst_cell_name, 
+                                              capture=capture, 
+                                              exchange=has_exchanged, 
+                                              previous_action=previous_action)
+
+                action = JersiAction(notation, state, 
+                                     capture=capture, 
+                                     exchange=has_exchanged, 
+                                     previous_action=previous_action)
 
             elif src_cube.beats(dst_top) and dst_bottom.sort != CubeSort.MOUNTAIN:
                 # Capture the stack
                 state = self.__fork()
+                has_exchanged = False
 
                 state.__cell_top[dst_cell_index] = Null.CUBE
                 state.__cell_bottom[dst_cell_index] = Null.CUBE
@@ -2055,13 +2196,21 @@ class JersiState:
                 state.__cell_bottom[dst_cell_index] = src_cube_index
                     
                 if capture == Capture.SOME_STACK:
-                    state.__manage_new_prisoner(dst_top_index)
-                    state.__manage_new_prisoner(dst_bottom_index)
+                    has_exchanged = state.__manage_new_prisoner(dst_top_index)
+                    has_exchanged = has_exchanged or state.__manage_new_prisoner(dst_bottom_index)
+                
                 else:
-                    state.__manage_new_prisoner(dst_bottom_index)
+                    has_exchanged = state.__manage_new_prisoner(dst_bottom_index)
 
-                notation = Notation.move_cube(src_cell_name, dst_cell_name, capture=capture, previous_action=previous_action)
-                action = JersiAction(notation, state, capture=capture, previous_action=previous_action)
+                notation = Notation.move_cube(src_cell_name, dst_cell_name, 
+                                              capture=capture, 
+                                              exchange=has_exchanged, 
+                                              previous_action=previous_action)
+
+                action = JersiAction(notation, state, 
+                                     capture=capture, 
+                                     exchange=has_exchanged, 
+                                     previous_action=previous_action)
 
             else:
                 action = None
@@ -2094,8 +2243,15 @@ class JersiState:
             state.__cell_bottom[dst_cell_index] = src_bottom_index
             state.__cell_top[dst_cell_index] = src_top_index
 
-            notation = Notation.move_stack(src_cell_name, dst_cell_name, capture=Capture.NONE, previous_action=previous_action)
-            action = JersiAction(notation, state, previous_action=previous_action)
+            notation = Notation.move_stack(src_cell_name, dst_cell_name, 
+                                           capture=Capture.NONE, 
+                                           exchange=False, 
+                                           previous_action=previous_action)
+
+            action = JersiAction(notation, state,
+                                 capture=Capture.NONE,
+                                 exchange=False,
+                                 previous_action=previous_action)
 
         elif self.__cell_top[dst_cell_index] == Null.CUBE:
             # destination cell has one cube
@@ -2114,6 +2270,7 @@ class JersiState:
             elif src_top.beats(dst_bottom):
                 # capture the bottom cube
                 state = self.__fork()
+                has_exchanged = False
 
                 state.__cell_bottom[dst_cell_index] = Null.CUBE
                 state.__cube_status[dst_bottom_index] = CubeStatus.CAPTURED
@@ -2130,10 +2287,17 @@ class JersiState:
                 state.__cell_top[dst_cell_index] = src_top_index
 
                 if capture == Capture.SOME_CUBE:
-                    state.__manage_new_prisoner(dst_bottom_index)
+                    has_exchanged = state.__manage_new_prisoner(dst_bottom_index)
 
-                notation = Notation.move_stack(src_cell_name, dst_cell_name, capture=capture, previous_action=previous_action)
-                action = JersiAction(notation, state, capture=capture, previous_action=previous_action)
+                notation = Notation.move_stack(src_cell_name, dst_cell_name, 
+                                               capture=capture, 
+                                               exchange=has_exchanged, 
+                                               previous_action=previous_action)
+
+                action = JersiAction(notation, state, 
+                                     capture=capture, 
+                                     exchange=has_exchanged, 
+                                     previous_action=previous_action)
 
             else:
                 action = None
@@ -2158,6 +2322,7 @@ class JersiState:
             elif src_top.beats(dst_top) and dst_bottom.sort != CubeSort.MOUNTAIN:
                 # capture the stack
                 state = self.__fork()
+                has_exchanged = False
 
                 state.__cell_bottom[dst_cell_index] = Null.CUBE
                 state.__cell_top[dst_cell_index] = Null.CUBE
@@ -2177,13 +2342,20 @@ class JersiState:
                 state.__cell_top[dst_cell_index] = src_top_index
 
                 if capture == Capture.SOME_STACK:
-                    state.__manage_new_prisoner(dst_top_index)
-                    state.__manage_new_prisoner(dst_bottom_index)
+                    has_exchanged = state.__manage_new_prisoner(dst_top_index)
+                    has_exchanged = has_exchanged or state.__manage_new_prisoner(dst_bottom_index)
                 else:
-                    state.__manage_new_prisoner(dst_bottom_index)
+                    has_exchanged = state.__manage_new_prisoner(dst_bottom_index)
 
-                notation = Notation.move_stack(src_cell_name, dst_cell_name, capture=capture, previous_action=previous_action)
-                action = JersiAction(notation, state, capture=capture, previous_action=previous_action)
+                notation = Notation.move_stack(src_cell_name, dst_cell_name, 
+                                               capture=capture, 
+                                               exchange=has_exchanged, 
+                                               previous_action=previous_action)
+
+                action = JersiAction(notation, state, 
+                                     capture=capture, 
+                                     exchange=has_exchanged, 
+                                     previous_action=previous_action)
 
             else:
                 action = None
@@ -2306,12 +2478,12 @@ def mikjersiSelectAction(action_names):
 
     def score_move_name(move_name):
 
-        catpures = re.sub(r"[^!]", "",move_name)
-        catpures = re.sub(r"!+", "100",catpures)
+        catpures = re.sub(r"[^!]", "", move_name)
+        catpures = re.sub(r"!+", "100", catpures)
 
-        stacks = re.sub(r"[^=]", "",move_name).replace("=", "10")
+        stacks = re.sub(r"[^=]", "", move_name).replace("=", "10")
 
-        cubes = re.sub(r"[^-]", "",move_name).replace("-", "1")
+        cubes = re.sub(r"[^-]", "", move_name).replace("-", "1")
 
         move_score = 0
 
@@ -2347,7 +2519,6 @@ def mikjersiSelectAction(action_names):
     else:
         action_name = random.choice(drop_names)
         
-
     return action_name
 
 
@@ -2467,7 +2638,7 @@ class MinimaxSearcher():
     __slots__ = ('__name', '__max_depth', '__max_children',
                  '__distance_weight', '__capture_weight', 
                  '__fighter_weight', '__reserve_weight',
-                 '__center_weight', '__credit_weight',
+                 '__center_weight', '__turn_credit_weight',
                  '__debug')
 
 
@@ -2478,20 +2649,20 @@ class MinimaxSearcher():
                                    'fighter_weight':8,
                                    'center_weight':4,
                                    'reserve_weight':2,
-                                   'credit_weight':1}
+                                   'turn_credit_weight':1}
 
     default_weights_by_depth[2] = {'distance_weight':32,
                                    'capture_weight':16,
                                    'fighter_weight':8,
                                    'center_weight':4,
                                    'reserve_weight':2,
-                                   'credit_weight':1}
+                                   'turn_credit_weight':1}
 
 
     def __init__(self, name, max_depth=1, max_children=None,
                   distance_weight=None, capture_weight=None,
                   fighter_weight=None, reserve_weight=None,
-                  center_weight=None, credit_weight=None):
+                  center_weight=None, turn_credit_weight=None):
 
         self.__debug = False
 
@@ -2538,10 +2709,10 @@ class MinimaxSearcher():
             self.__reserve_weight = default_weights['reserve_weight']
 
 
-        if credit_weight is not None:
-            self.__credit_weight = credit_weight
+        if turn_credit_weight is not None:
+            self.__turn_credit_weight = turn_credit_weight
         else:
-            self.__credit_weight = default_weights['credit_weight']
+            self.__turn_credit_weight = default_weights['turn_credit_weight']
 
 
     def get_name(self):
@@ -2708,8 +2879,8 @@ class MinimaxSearcher():
             center_difference = minimax_maximizer_sign*(white_center_count - black_center_count)
 
 
-            # credit acts symmetrically for white and black
-            credit = mikjersi_state.get_credit()
+            # turn_credit acts symmetrically for white and black
+            turn_credit = mikjersi_state.get_turn_credit()
 
 
             # normalize each feature in the intervall [-1, +1]
@@ -2719,7 +2890,7 @@ class MinimaxSearcher():
             fighter_norm = 4
             reserve_norm = 6
             center_norm = 4
-            credit_norm = JersiState.get_max_credit()
+            turn_credit_norm = JersiState.get_max_turn_credit()
             
             assert distance_difference <= distance_norm
             assert -distance_difference <= distance_norm
@@ -2733,8 +2904,8 @@ class MinimaxSearcher():
             assert center_difference <= center_norm
             assert -center_difference <= center_norm
 
-            assert credit <= credit_norm
-            assert -credit <= credit_norm
+            assert turn_credit <= turn_credit_norm
+            assert -turn_credit <= turn_credit_norm
 
 
             distance_difference = distance_difference/distance_norm
@@ -2742,7 +2913,7 @@ class MinimaxSearcher():
             fighter_difference = fighter_difference/fighter_norm
             reserve_difference = reserve_difference/reserve_norm
             center_difference = center_difference/center_norm
-            credit = credit/center_norm
+            turn_credit = turn_credit/center_norm
             
             # synthesis
 
@@ -2751,7 +2922,7 @@ class MinimaxSearcher():
             value += self.__fighter_weight*fighter_difference
             value += self.__reserve_weight*reserve_difference
             value += self.__center_weight*center_difference
-            value += self.__credit_weight*credit
+            value += self.__turn_credit_weight*turn_credit
 
         return value
 
@@ -3276,6 +3447,7 @@ SEARCHER_CATALOG.add( MinimaxSearcher("minimax3", max_depth=3) )
 SEARCHER_CATALOG.add( MinimaxSearcher("minimax4", max_depth=4) )
 
 SEARCHER_CATALOG.add( MctsSearcher("mcts-90s-jrp", time_limit=90_000, rolloutPolicy=mikjersiRandomPolicy) )
+SEARCHER_CATALOG.add( MctsSearcher("mcts-10s-jrp", time_limit=10_000, rolloutPolicy=mikjersiRandomPolicy) )
 
 
 class Game:
@@ -3406,20 +3578,26 @@ def test_game_between_random_players():
     print(" test_game_between_random_players ...")
     print("=====================================")
 
-    default_max_credit = JersiState.get_max_credit()
-    JersiState.set_max_credit(10_000)
+    default_max_turn_credit = JersiState.get_max_turn_credit()
+    JersiState.set_max_turn_credit(10_000)
 
-    game = Game()
+    default_max_exchange_credit = JersiState.get_max_exchange_credit()
+    JersiState.set_max_exchange_credit(10_000)
 
-    game.set_white_searcher(RandomSearcher("random"))
-    game.set_black_searcher(RandomSearcher("random"))
+    game_count = 100
+    for _ in range(game_count):
+        game = Game()
+    
+        game.set_white_searcher(RandomSearcher("random"))
+        game.set_black_searcher(RandomSearcher("random"))
+    
+        game.start()
+    
+        while game.has_next_turn():
+            game.next_turn()
 
-    game.start()
-
-    while game.has_next_turn():
-        game.next_turn()
-
-    JersiState.set_max_credit(default_max_credit)
+    JersiState.set_max_turn_credit(default_max_turn_credit)
+    JersiState.set_max_exchange_credit(default_max_exchange_credit)
 
     print("=====================================")
     print("test_game_between_random_players done")
@@ -3432,8 +3610,8 @@ def test_game_between_mcts_players():
     print("test_game_between_mcts_players ...")
     print("==================================")
 
-    default_max_credit = JersiState.get_max_credit()
-    JersiState.set_max_credit(10)
+    default_max_turn_credit = JersiState.get_max_turn_credit()
+    JersiState.set_max_turn_credit(10)
 
     game = Game()
 
@@ -3445,7 +3623,7 @@ def test_game_between_mcts_players():
     while game.has_next_turn():
         game.next_turn()
 
-    JersiState.set_max_credit(default_max_credit)
+    JersiState.set_max_turn_credit(default_max_turn_credit)
 
     print("===================================")
     print("test_game_between_mcts_players done")
@@ -3458,8 +3636,8 @@ def test_game_between_random_and_human_players():
     print("test_game_between_random_and_human_players ...")
     print("==============================================")
 
-    default_max_credit = JersiState.get_max_credit()
-    JersiState.set_max_credit(10)
+    default_max_turn_credit = JersiState.get_max_turn_credit()
+    JersiState.set_max_turn_credit(10)
 
     game = Game()
 
@@ -3474,7 +3652,7 @@ def test_game_between_random_and_human_players():
     while game.has_next_turn():
         game.next_turn()
 
-    JersiState.set_max_credit(default_max_credit)
+    JersiState.set_max_turn_credit(default_max_turn_credit)
 
     print("===============================================")
     print("test_game_between_random_and_human_players done")
