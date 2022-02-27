@@ -397,7 +397,7 @@ class GameGui(ttk.Frame):
         self.__root = tk.Tk()
 
         try:
-            self.__root.title("mikjersi-certu : for playing the mikjersi 1.0 boardgame and testing AI agents")
+            self.__root.title("mikjersi-certu : for playing the mikjersi 1.1 boardgame and testing AI agents")
             self.__root.iconbitmap(AppConfig.ICON_FILE)
         except:
             pass
@@ -840,7 +840,7 @@ class GameGui(ttk.Frame):
                         self.__text_actions.config(state="normal")
 
                         turn = self.__game.get_turn()
-                        notation = str(turn).rjust(4) + " " + self.__game.get_last_action().ljust(16)
+                        notation = str(turn).rjust(4) + " " + self.__game.get_last_action().ljust(18)
                         if turn % 2 == 0:
                             notation = ' '*2 + notation + "\n"
 
@@ -972,7 +972,7 @@ class GameGui(ttk.Frame):
                 self.__text_actions.config(state="normal")
 
                 turn = self.__game.get_turn()
-                notation = str(turn).rjust(4) + " " + self.__game.get_last_action().ljust(16)
+                notation = str(turn).rjust(4) + " " + self.__game.get_last_action().ljust(18)
                 if turn % 2 == 0:
                     notation = ' '*2 + notation + "\n"
 

@@ -3,7 +3,7 @@
 
 """mikjersi_rules.py implements the rules engine for the MIKJERSI boardgame."""
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 _COPYRIGHT_AND_LICENSE = """
 MIKJERSI-CERTU implements a GUI and a rules engine for the MIKJERSI boardgame.
@@ -925,40 +925,7 @@ class JersiState:
                  '__turn_credit', '__exchange_credit', '__player', '__turn',
                  '__actions', '__actions_by_simple_names', '__actions_by_names',
                  '__taken', '__terminal_case', '__terminated', '__rewards')
-
-
-    def audit(self, at, new_prisonner_index=None):
-
-        print()
-        print("--- audit --- at %s for state %s ..." % (at, id(self)))
-                
-        if new_prisonner_index is not None:
-            assert self.__cube_status[new_prisonner_index] == CubeStatus.CAPTURED
-        
-        for (cube_index, cube_status) in enumerate(self.__cube_status):
-            assert ( cube_status == CubeStatus.ACTIVATED or
-                     cube_status == CubeStatus.CAPTURED or
-                     cube_status == CubeStatus.RESERVED )
-            
-            cell_found_once = False
-            
-            for (cell_index, cell) in enumerate(Cell.all):
-                
-                if self.__cell_bottom[cell_index] == cube_index:
-                    assert not cell_found_once
-                    cell_found_once = True
-                    
-                if self.__cell_top[cell_index] == cube_index:
-                    assert not cell_found_once
-                    cell_found_once = True
-                    
-            if new_prisonner_index is not None and cube_index == new_prisonner_index:
-                assert not cell_found_once                    
-            else:
-                assert cell_found_once
-                     
-        print("--- audit --- at %s for state %s done" % (at, id(self)))
-        
+       
 
     def __init__(self, play_reserve=True):
         
@@ -1182,7 +1149,10 @@ class JersiState:
                 
                 elif cube.player == Player.BLACK:
                     assert self.__cell_bottom[cell_index] == Null.CUBE
-                    self.__cell_bottom[cell_index] = cube_index            
+                    self.__cell_bottom[cell_index] = cube_index
+                    
+                else:
+                    assert False
                 
             
             elif cell.player == Player.BLACK:
@@ -1194,6 +1164,9 @@ class JersiState:
                 elif cube.player == Player.WHITE:
                     assert self.__cell_top[cell_index] == Null.CUBE
                     self.__cell_top[cell_index] = cube_index  
+                    
+                else:
+                    assert False
             
             else:
                 assert False
@@ -1224,7 +1197,6 @@ class JersiState:
 
 
     def __manage_new_prisoner(self, cube_index):
-        self.audit("__manage_new_prisoner.enter", new_prisonner_index=cube_index)
 
         assert self.__cube_status[cube_index] == CubeStatus.CAPTURED
 
@@ -1253,12 +1225,6 @@ class JersiState:
                 self.__cell_bottom[opposite_cell_index] = Null.CUBE
                 
             else:
-                
-                captured_cube = Cube.all[cube_index]
-                exchanged_cube = Cube.all[opposite_index]
-                print("captured_cube:", captured_cube)
-                print("exchanged_cube:", exchanged_cube)              
-                
                 assert False
 
             self.__cube_status[cube_index] = CubeStatus.RESERVED            
@@ -1269,7 +1235,6 @@ class JersiState:
             
             has_exchanged = True
 
-        self.audit("__manage_new_prisoner.exit")
         return has_exchanged
 
 
@@ -2089,7 +2054,7 @@ class JersiState:
                     
                     if capture == Capture.SOME_CUBE:
                         has_exchanged = state.__manage_new_prisoner(dst_bottom_index)
-
+                    
                     notation = Notation.move_cube(src_cell_name, dst_cell_name, 
                                                   capture=capture, 
                                                   exchange=has_exchanged, 
@@ -2162,7 +2127,7 @@ class JersiState:
                     
                 if capture == Capture.SOME_CUBE:
                     has_exchanged = state.__manage_new_prisoner(dst_top_index)
-
+                
                 notation = Notation.move_cube(src_cell_name, dst_cell_name, 
                                               capture=capture, 
                                               exchange=has_exchanged, 
@@ -2196,11 +2161,13 @@ class JersiState:
                 state.__cell_bottom[dst_cell_index] = src_cube_index
                     
                 if capture == Capture.SOME_STACK:
-                    has_exchanged = state.__manage_new_prisoner(dst_top_index)
-                    has_exchanged = has_exchanged or state.__manage_new_prisoner(dst_bottom_index)
+                    top_has_exchanged = state.__manage_new_prisoner(dst_top_index)
+                    bottom_has_exchanged = state.__manage_new_prisoner(dst_bottom_index)
+                    has_exchanged = top_has_exchanged or bottom_has_exchanged
                 
                 else:
                     has_exchanged = state.__manage_new_prisoner(dst_bottom_index)
+
 
                 notation = Notation.move_cube(src_cell_name, dst_cell_name, 
                                               capture=capture, 
@@ -2330,6 +2297,7 @@ class JersiState:
                 state.__cube_status[dst_bottom_index] = CubeStatus.CAPTURED
                 state.__cube_status[dst_top_index] = CubeStatus.CAPTURED
 
+
                 if dst_top.sort == CubeSort.KING:
                     capture = Capture.KING_STACK
                 else:
@@ -2342,8 +2310,9 @@ class JersiState:
                 state.__cell_top[dst_cell_index] = src_top_index
 
                 if capture == Capture.SOME_STACK:
-                    has_exchanged = state.__manage_new_prisoner(dst_top_index)
-                    has_exchanged = has_exchanged or state.__manage_new_prisoner(dst_bottom_index)
+                    top_has_exchanged = state.__manage_new_prisoner(dst_top_index)
+                    bottom_exchanged = state.__manage_new_prisoner(dst_bottom_index)
+                    has_exchanged = top_has_exchanged or bottom_exchanged
                 else:
                     has_exchanged = state.__manage_new_prisoner(dst_bottom_index)
 
@@ -3447,7 +3416,6 @@ SEARCHER_CATALOG.add( MinimaxSearcher("minimax3", max_depth=3) )
 SEARCHER_CATALOG.add( MinimaxSearcher("minimax4", max_depth=4) )
 
 SEARCHER_CATALOG.add( MctsSearcher("mcts-90s-jrp", time_limit=90_000, rolloutPolicy=mikjersiRandomPolicy) )
-SEARCHER_CATALOG.add( MctsSearcher("mcts-10s-jrp", time_limit=10_000, rolloutPolicy=mikjersiRandomPolicy) )
 
 
 class Game:
@@ -3582,9 +3550,9 @@ def test_game_between_random_players():
     JersiState.set_max_turn_credit(10_000)
 
     default_max_exchange_credit = JersiState.get_max_exchange_credit()
-    JersiState.set_max_exchange_credit(10_000)
+    JersiState.set_max_exchange_credit(10)
 
-    game_count = 100
+    game_count = 3
     for _ in range(game_count):
         game = Game()
     
@@ -3748,7 +3716,7 @@ def main():
     if True:
         test_game_between_random_players()
 
-    if False:
+    if True:
         test_game_between_mcts_players()
 
     if False:
