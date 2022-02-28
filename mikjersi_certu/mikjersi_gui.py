@@ -695,8 +695,7 @@ class GameGui(ttk.Frame):
     def __command_action_confirm(self):
 
         self.__action_input = self.__variable_action.get()
-        self.__action_input = self.__action_input.replace("!", "")
-
+        self.__action_input = self.__action_input.replace('!', '').replace('*', '')
 
         (self.__action_validated,
          message) = rules.Notation.validate_simple_notation(self.__action_input,
@@ -795,7 +794,7 @@ class GameGui(ttk.Frame):
                    edited_actions = list()
                    for action_index in range(action_count):
                        action = actions_items[2*action_index + 1]
-                       action = action.replace("!", "")
+                       action = action.replace('!', '').replace('*', '')
                        edited_actions.append(action)
 
                # interpet actions
@@ -840,7 +839,7 @@ class GameGui(ttk.Frame):
                         self.__text_actions.config(state="normal")
 
                         turn = self.__game.get_turn()
-                        notation = str(turn).rjust(4) + " " + self.__game.get_last_action().ljust(18)
+                        notation = str(turn).rjust(4) + " " + self.__game.get_last_action().ljust(17)
                         if turn % 2 == 0:
                             notation = ' '*2 + notation + "\n"
 
@@ -972,7 +971,7 @@ class GameGui(ttk.Frame):
                 self.__text_actions.config(state="normal")
 
                 turn = self.__game.get_turn()
-                notation = str(turn).rjust(4) + " " + self.__game.get_last_action().ljust(18)
+                notation = str(turn).rjust(4) + " " + self.__game.get_last_action().ljust(17)
                 if turn % 2 == 0:
                     notation = ' '*2 + notation + "\n"
 

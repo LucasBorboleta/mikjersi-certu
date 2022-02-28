@@ -3,7 +3,7 @@
 
 """mikjersi_rules.py implements the rules engine for the MIKJERSI boardgame."""
 
-__version__ = "1.0.2"
+__version__ = "1.1.0"
 
 _COPYRIGHT_AND_LICENSE = """
 MIKJERSI-CERTU implements a GUI and a rules engine for the MIKJERSI boardgame.
@@ -640,6 +640,7 @@ class Notation:
 
     @staticmethod
     def move_cube(src_cell_name, dst_cell_name, capture, exchange, previous_action):
+
         if previous_action is None:
             notation = src_cell_name + "-" + dst_cell_name
         else:
@@ -657,7 +658,8 @@ class Notation:
         else:
             assert False
             
-        if exchange:
+        if exchange or (previous_action is not None and previous_action.exchange):
+            notation = notation.replace("*", "")
             notation += "*"
 
         return notation
@@ -665,6 +667,7 @@ class Notation:
 
     @staticmethod
     def move_stack(src_cell_name, dst_cell_name, capture, exchange, previous_action):
+
         if previous_action is None:
             notation = src_cell_name + "=" + dst_cell_name
         else:
@@ -682,7 +685,8 @@ class Notation:
         else:
             assert False
             
-        if exchange:
+        if exchange or (previous_action is not None and previous_action.exchange):
+            notation = notation.replace("*", "")
             notation += "*"
 
         return notation
@@ -708,17 +712,23 @@ class Notation:
 
     @staticmethod
     def relocate_king(src_king_label, dst_cell_name, previous_action=None):
+
         if previous_action is None:
             notation = ""
         else:
             notation = previous_action.notation + "/"
         notation += src_king_label + ":" + dst_cell_name
+            
+        if previous_action is not None and previous_action.exchange:
+            notation = notation.replace("*", "")
+            notation += "*"
+
         return notation
 
 
     @staticmethod
     def simplify_notation(notation):
-        return notation.strip().replace(' ', '').replace('!', '')
+        return notation.strip().replace(' ', '').replace('!', '').replace('*', '')
 
 
     @staticmethod
@@ -3716,13 +3726,13 @@ def main():
     if True:
         test_game_between_random_players()
 
-    if True:
+    if False:
         test_game_between_mcts_players()
 
     if False:
         test_game_between_random_and_human_players()
 
-    if True:
+    if False:
         test_game_between_minimax_players()
 
     if True:
